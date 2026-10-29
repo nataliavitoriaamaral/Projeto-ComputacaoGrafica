@@ -105,19 +105,19 @@ Cada um vem como ".gltf" + ".bin" + uma pasta com texturas em PNG.
 
 ## Principais dificuldades
 
-**Personagem em T-pose.** Os dois modelos vêm com os braços abertos e as pernas retas,
+**Personagem em T-pose:** Os dois modelos vêm com os braços abertos e as pernas retas,
 sem animação. Não dá pra dobrar o joelho sem mexer no esqueleto, então "sentar" o piloto
 é simulado. Nós afundamos o quadril até a altura do assento e aplicamos um clipping plane
 horizontal nos materiais do personagem, escondendo tudo que fica abaixo
 do banco. O plano é recalculado a cada frame porque é definido em coordenadas de mundo.
 
-**Materiais dos ".gltf" chegando em branco.** Os dois modelos usam a extensão
+**Materiais dos ".gltf" chegando em branco:** Os dois modelos usam a extensão
 "KHR_materials_pbrSpecularGlossiness", que as versões atuais do GLTFLoader não suportam
 mais (o console retornou "Unknown extension"). Isso fez com que todos os materiais chegassem brancos
 e sem textura. Solucionamos isso percorrendo os materiais depois do carregamento e procurando na pasta
 "textures/" um arquivo com o nome do material, carregando na mão o que existir.
 
-**O olho direito do Luigi.** Esse foi o problema mais difícil e demoramos para encontrar a 
+**O olho direito do Luigi:** Esse foi o problema mais difícil e demoramos para encontrar a 
 solução. Eram dois defeitos sobrepostos:
 
 1. O branco do olho direito tem coordenadas de textura fora do intervalo
@@ -137,7 +137,7 @@ solução. Eram dois defeitos sobrepostos:
 simétricos. O
 retângulo escuro atrás dele é o encosto do banco do próprio kart.*
 
-**Proporção do kart.** Como tudo é posicionado por coordenadas escritas à mão, acertar as
+**Proporção do kart:** Como tudo é posicionado por coordenadas escritas à mão, acertar as
 medidas foi bastante tentativa e erro. 
 
 ## O que ainda falta implementar
