@@ -1,7 +1,6 @@
 // main.js
 // Integração da pista com Mario e Luigi no grid de largada.
-// localClippingEnabled precisa que ser true, senão o Racer não corta
-// as pernas e os personagens voltam a ficar "em pé no banco".
+// localClippingEnabled precisa ser true, senão o Racer não corta
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -17,7 +16,7 @@ import { createTireStack } from './objects/TireStack.js';
 import { createItemBox } from './objects/ItemBox.js';
 import { createOilSlick } from './objects/OilSlick.js';
 
-// caixa de erro visível na tela, pq às vezes o console tá fechado
+// caixa de erro visível na tela, pq às vezes o console está fechado
 const errBox = document.createElement('div');
 Object.assign(errBox.style, {
   position: 'fixed', top: '8px', left: '8px',
@@ -46,7 +45,7 @@ const dir = new THREE.DirectionalLight(0xffffff, 1.2);
 dir.position.set(100, 80, 50);
 dir.target.position.set(10, 0, -30);
 dir.castShadow = true;
-// cobre o circuito inteiro; o mapa maior ajuda nas sombras dos objetos pequenos
+// cobre o circuito inteiro. O mapa maior ajuda nas sombras dos objetos pequenos
 dir.shadow.mapSize.set(4096, 4096);
 dir.shadow.camera.left = -115;
 dir.shadow.camera.right = 115;
@@ -199,7 +198,8 @@ renderer.setAnimationLoop(() => {
       characterFactory: createMario,
     });
     placeRacer(marioRacer, -2.5, 3.5);
-    marioRacer.speed = 0; // parado na largada, sem girar as rodas
+    marioRacer.speed = 0;          // parado na largada
+    marioRacer.idleWheelSpeed = 4; // rodas girando no lugar, esperando o start
     scene.add(marioRacer);
     racers.push(marioRacer);
   } catch (e) {
@@ -213,6 +213,7 @@ renderer.setAnimationLoop(() => {
     });
     placeRacer(luigiRacer, 2.5, 5);
     luigiRacer.speed = 0;
+    luigiRacer.idleWheelSpeed = 4;
     scene.add(luigiRacer);
     racers.push(luigiRacer);
   } catch (e) {

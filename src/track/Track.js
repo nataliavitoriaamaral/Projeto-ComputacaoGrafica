@@ -24,7 +24,7 @@ export class Track extends THREE.Group {
     this._buildStartLine();
   }
 
-  // 1. Definição do circuito 3D através de pontos de controlo
+  // Definição do circuito 3D através de pontos de controle
   _createPath() {
     const controlPoints = [
       new THREE.Vector3(  0, 0,   0),
@@ -36,11 +36,11 @@ export class Track extends THREE.Group {
       new THREE.Vector3(-40, 0,  30),
     ];
 
-    // Curva fechada (closed = true) e suave
+    // Curva fechada e suave
     this.path = new THREE.CatmullRomCurve3(controlPoints, true, 'centripetal');
   }
 
-  // 2. Terreno de grama estendido ao redor
+  // Terreno de grama estendido ao redor
   _buildGround() {
     const geo = new THREE.PlaneGeometry(300, 300);
     const mat = new THREE.MeshStandardMaterial({
@@ -56,8 +56,7 @@ export class Track extends THREE.Group {
     this.add(ground);
   }
 
-  // 3. Asfalto gerado por extrusão de um perfil plano ao longo da curva 3D
-// 3. Asfalto perfeitamente plano utilizando BufferGeometry
+  // Asfalto gerado por extrusão de um perfil plano ao longo da curva 3D
   _buildAsphalt() {
     const steps = 300;
     const points = this.path.getSpacedPoints(steps);
@@ -66,7 +65,7 @@ export class Track extends THREE.Group {
     const vertices = [];
     const indices = [];
 
-    // 1. Gera os vértices da esquerda e da direita acompanhando a curva
+    // Gera os vértices da esquerda e da direita acompanhando a curva
     points.forEach((pt, i) => {
       const u = i / steps;
       
@@ -85,38 +84,38 @@ export class Track extends THREE.Group {
       vertices.push(rightPt.x, rightPt.y, rightPt.z);
     });
 
-    // 2. Conecta os vértices criando os triângulos que formam o asfalto
+    // Conecta os vértices criando os triângulos que formam o asfalto
     for (let i = 0; i < steps; i++) {
       const v1 = i * 2;           // Esquerda atual
       const v2 = i * 2 + 1;       // Direita atual
       const v3 = (i + 1) * 2;     // Esquerda próximo
       const v4 = (i + 1) * 2 + 1; // Direita próximo
 
-      // Dois triângulos formam um "segmento retangular" do asfalto
+      // Dois triângulos formando o  asfalto
       indices.push(v1, v2, v3);
       indices.push(v2, v4, v3);
     }
 
-    // 3. Constrói a geometria 3D final
+    // Constrói a geometria final
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geo.setIndex(indices);
     geo.computeVertexNormals();
 
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x2b2b2b, // Cinza asfalto
+      color: 0x2b2b2b, // Cinza do asfalto
       roughness: 0.8,
       metalness: 0.1,
       side: THREE.DoubleSide
     });
 
     const asphalt = new THREE.Mesh(geo, mat);
-    asphalt.position.y = 0.01; // Levemente acima da grama pra não dar z-fighting
+    asphalt.position.y = 0.01; // Levemente acima da grama 
     asphalt.receiveShadow = true;
     this.add(asphalt);
   }
 
-  // 4. Faixa Central Amarela Tracejada (Estilo Rodovia)
+  // Faixa Central Amarela Tracejada 
   _buildCenterLine() {
     const numDashes = 120; // Quantidade de traços ao longo da pista
     const points = this.path.getSpacedPoints(numDashes);
@@ -127,7 +126,7 @@ export class Track extends THREE.Group {
     });
 
     points.forEach((pt, i) => {
-      // Pula alguns pontos para criar o efeito TRACEJADO (ex: desenha 1, pula 1)
+      // Pula alguns pontos para criar o efeito tracejado
       if (i % 2 === 0) {
         const u = i / numDashes;
         const tangent = this.path.getTangentAt(u).normalize();
@@ -145,7 +144,7 @@ export class Track extends THREE.Group {
     });
   }
 
-  // 5. Zebras laterais (vermelho e branco) alternadas ao longo das bordas
+  // Zebras laterais  alternadas ao longo das bordas
   _buildKerbs() {
     const numKerbs = 200;
     const points = this.path.getSpacedPoints(numKerbs);
@@ -185,7 +184,7 @@ export class Track extends THREE.Group {
     });
   }
 
-  // 6. Muros externos de proteção (cinza claro)
+  // Muros externos de proteção 
   _buildWalls() {
     const numWallSegments = 180;
     const points = this.path.getSpacedPoints(numWallSegments);
@@ -214,7 +213,7 @@ export class Track extends THREE.Group {
     });
   }
 
-  // 7. Linha de Chegada / Largada Xadrez (Gerada via Canvas Procedural, igual aos logos)
+  // Linha de Chegada / Largada Xadrez 
   _buildStartLine() {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 128;

@@ -13,14 +13,12 @@ export class Character extends THREE.Group {
     texturesDir,
     name = 'Character',
     debug = false,
-    cloneMirrorX = null,
     materialMapMirrors = [],
   }) {
     super();
     this.name = name;
     this.targetHeight = targetHeight;
     this._debug = debug;
-    this._cloneMirrorX = cloneMirrorX;
     this._materialMapMirrors = materialMapMirrors;
 
     this._url = url;
@@ -64,8 +62,6 @@ export class Character extends THREE.Group {
     this._fixMaterialVisibility();
     this._fixMirroredMeshes();
 
-    if (this._cloneMirrorX) this._cloneMeshMirroredX(this._cloneMirrorX);
-
     if (this._debug) {
       this._logMeshStats();
       this._logEyeStats();
@@ -102,6 +98,11 @@ export class Character extends THREE.Group {
           url,
           (tex) => {
             tex.flipY = false;
+            // algumas meshes do Luigi (o branco do olho direito) têm UV > 1 e
+            // contam com a textura se repetindo. no modo clamp, que é o padrão
+            // do TextureLoader, elas só pegavam a borda transparente e sumiam.
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
             if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
             resolve(tex);
           },
@@ -163,6 +164,9 @@ export class Character extends THREE.Group {
     await Promise.all(pass3);
   }
 
+  // o Luigi veio sem o PNG de alguns materiais do lado direito. o lado direito
+  // é o espelho do esquerdo, então dá pra reaproveitar a textura do par que
+  // existe invertendo o eixo U: repeat.x = -1 e offset.x = 1 fazem u virar 1-u.
   _mirrorMaterialMap(pairs) {
     const materials = new Map();
     this.model.traverse((obj) => {
@@ -180,7 +184,12 @@ export class Character extends THREE.Group {
         continue;
       }
       if (src.map && !dst.map) {
-        dst.map = src.map;
+        const mirrored = src.map.clone();
+        mirrored.repeat.x = -1;
+        mirrored.offset.x = 1;
+        mirrored.needsUpdate = true;
+
+        dst.map = mirrored;
         dst.color.setHex(0xffffff);
         if (src.normalMap) dst.normalMap = src.normalMap;
         dst.needsUpdate = true;
@@ -250,47 +259,6 @@ export class Character extends THREE.Group {
         console.log(`[${this.name}] winding invertido em: ${obj.name} (det=${det.toFixed(3)})`);
       }
     });
-  }
-
-  // tentativa de arrumar o olho direito do Luigi. Ainda não funciona direito, mas pelo menos não quebra o resto do modelo.
-  _cloneMeshMirroredX(meshName) {
-    const src = this.model.getObjectByName(meshName);
-    if (!src) {
-      console.warn(`[${this.name}] cloneMirrorX: mesh "${meshName}" não encontrada`);
-      return;
-    }
-
-    this.model.updateMatrixWorld(true);
-    const modelBox = new THREE.Box3().setFromObject(this.model);
-    const centerX = (modelBox.min.x + modelBox.max.x) / 2;
-
-    const srcWorld = new THREE.Vector3();
-    src.getWorldPosition(srcWorld);
-
-    const mirroredWorld = new THREE.Vector3(
-      2 * centerX - srcWorld.x,
-      srcWorld.y,
-      srcWorld.z
-    );
-
-    const clone = src.clone(true);
-    clone.name = (src.name || 'mesh') + '_mirrored';
-
-    src.parent.add(clone);
-    src.parent.updateMatrixWorld(true);
-    clone.position.copy(src.parent.worldToLocal(mirroredWorld.clone()));
-    clone.visible = true;
-    clone.frustumCulled = false;
-
-    if (this._debug) {
-      console.log(`[${this.name}] clonou mesh:`, {
-        de: src.name,
-        para: clone.name,
-        srcWorldX: +srcWorld.x.toFixed(3),
-        cloneWorldX: +mirroredWorld.x.toFixed(3),
-        centerX: +centerX.toFixed(3),
-      });
-    }
   }
 
   _logMeshStats() {

@@ -80,6 +80,9 @@ export class Racer extends THREE.Group {
   set speed(v) { this.kart.speed = v; }
   get speed()  { return this.kart.speed; }
 
+  set idleWheelSpeed(v) { this.kart.idleWheelSpeed = v; }
+  get idleWheelSpeed()  { return this.kart.idleWheelSpeed; }
+
   get steeringWheel() { return this.kart.steeringWheel; }
 }
 

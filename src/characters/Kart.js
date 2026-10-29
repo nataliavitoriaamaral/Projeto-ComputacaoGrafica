@@ -63,6 +63,9 @@ export class Kart extends THREE.Group {
     this.config = PRESETS[preset] ?? PRESETS.mario;
 
     this.speed = 0;
+    // giro em ponto morto: as rodas giram sem o kart sair do lugar,
+    // dando a ideia de que o piloto está acelerando esperando a largada
+    this.idleWheelSpeed = 0;
 
     this.wheelRadius = 0.32;
     this.wheelWidth  = 0.28;
@@ -106,9 +109,10 @@ export class Kart extends THREE.Group {
     body.receiveShadow = true;
     this.add(body);
 
-    const noseGeo = new THREE.BoxGeometry(0.88, 0.22, 0.38);
+    // bico curto: termina logo depois das rodas da frente (z = 0.60 + raio)
+    const noseGeo = new THREE.BoxGeometry(0.88, 0.22, 0.18);
     const nose = new THREE.Mesh(noseGeo, mat);
-    nose.position.set(0, this.wheelRadius + 0.03, 0.95);
+    nose.position.set(0, this.wheelRadius + 0.03, 0.86);
     nose.castShadow = true;
     this.add(nose);
 
@@ -248,15 +252,17 @@ export class Kart extends THREE.Group {
 
     const tilt = -0.5;
 
+    // coluna e aro puxados pra trás, mais perto do banco, pra o volante cair
+    // na frente do piloto e não dentro da carroceria dianteira
     const colGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.45, 12);
     const col = new THREE.Mesh(colGeo, columnMat);
-    col.position.set(0, this.wheelRadius + 0.42, 0.35);
+    col.position.set(0, this.wheelRadius + 0.42, 0.17);
     col.rotation.x = tilt;
     group.add(col);
 
     const ringGeo = new THREE.TorusGeometry(0.13, 0.025, 10, 32);
     const ring = new THREE.Mesh(ringGeo, wheelMat);
-    ring.position.set(0, this.wheelRadius + 0.60, 0.52);
+    ring.position.set(0, this.wheelRadius + 0.60, 0.34);
     ring.rotation.x = Math.PI / 2 + tilt;
     group.add(ring);
     this.steeringWheel = ring;
@@ -410,8 +416,10 @@ export class Kart extends THREE.Group {
   }
 
   // v = omega * r  =>  omega = v / r
+  // com o kart parado usa idleWheelSpeed, senão as rodas ficariam travadas
   update(delta) {
-    const omega = this.speed / this.wheelRadius;
+    const v = this.speed !== 0 ? this.speed : this.idleWheelSpeed;
+    const omega = v / this.wheelRadius;
     for (const wheel of this.wheels) {
       wheel.rotation.x += omega * delta;
     }

@@ -11,24 +11,24 @@ npm install
 npm run dev
 ```
 
-Abre o endereço que o Vite imprimir no terminal (geralmente `http://localhost:5173`).
+Abre o endereço que o Vite imprimir no terminal (geralmente "http://localhost:5173").
 
 A página inicial mostra a pista com os pilotos e os objetos do cenário integrados.
 Para ver só o preview dos obstáculos e objetos, acesse `/obstaculos.html` no mesmo endereço.
 
-Controle da câmera com `OrbitControls`: arrastar com o botão esquerdo para rotação,
+Controle da câmera com "OrbitControls": arrastar com o botão esquerdo para rotação,
 com o botão direito para translação e utilizar a roda de rolagem para zoom.
 As teclas **1**, **2** e **3** selecionam, respectivamente, as vistas da largada,
 do circuito completo e do trecho inicial com obstáculos.
 
 ## O que tem neste repositório
 
-- **Karts** modelados proceduralmente com primitivas do Three.js (`BoxGeometry`, `CylinderGeometry`, `TorusGeometry`, etc.) agrupadas em hierarquia. Cores e detalhes diferentes por personagem (Mario vermelho com 3 escapamentos cilíndricos, Luigi verde com 2 escapamentos cônicos).
-- **Personagens** carregados de arquivos `.gltf` baixados do Sketchfab (licença CC-BY, créditos abaixo). O loader faz um reparo nos materiais e nas meshes espelhadas que vieram quebradas.
-- **Rodas** giram em função da velocidade usando `ω = v/r`.
-- Como os modelos vêm em T-pose (pernas retas), "sentar" o personagem é simulado afundando o quadril até o nível do assento e usando um `clipping plane` horizontal pra esconder tudo que fica abaixo.
-- **Obstáculos e objetos do cenário** feitos só com primitivas (cone, barril, pilha de pneus, caixa de item e mancha de óleo), em `src/objects/`. Cada um é uma função que retorna um `THREE.Group`.
-- **Integração com a pista** usando pontos e tangentes da curva (`getPointAt` e `getTangentAt`) para posicionar e orientar pilotos e objetos. Deslocamentos laterais distribuem os elementos pela largura da pista. As caixas de item flutuam com `Math.sin` e giram no loop de animação. Câmera controlada por `OrbitControls` e sombras com `DirectionalLight`.
+- **Karts** modelados proceduralmente com primitivas do Three.js (BoxGeometry, CylinderGeometry, TorusGeometry, etc.) agrupadas em hierarquia. Cores e detalhes diferentes por personagem (Mario vermelho com 3 escapamentos cilíndricos, Luigi verde com 2 escapamentos cônicos).
+- **Personagens** carregados de arquivos ".gltf" baixados do Sketchfab. O loader faz um reparo nos materiais e nas meshes espelhadas que vieram quebradas.
+- **Rodas** giram em função da velocidade usando 'ω = v/r'.
+- Como os modelos vêm em T-pose , "sentar" o personagem é simulado afundando o quadril até o nível do assento e usando um clipping plane horizontal pra esconder tudo que fica abaixo.
+- **Obstáculos e objetos do cenário** feitos só com primitivas (cone, barril, pilha de pneus, caixa de item e mancha de óleo), em "src/objects/". Cada um é uma função que retorna um THREE.Group.
+- **Integração com a pista** usando pontos e tangentes da curva (getPointAt e getTangentAt) para posicionar e orientar pilotos e objetos. Deslocamentos laterais distribuem os elementos pela largura da pista. As caixas de item flutuam com "Math.sin" e giram no loop de animação. 
 
 ## Estrutura
 
@@ -50,4 +50,5 @@ public/
 
 ## Observações
 
-- Ainda não conseguimos arrumar o olho direito do Luigi.
+- O relatório do trabalho está em [RELATORIO.md](RELATORIO.md).
+- As mãos dos personagens atravessam a lateral da carroceria, porque os modelos vêm em T-pose e ainda não mexemos nos ossos dos braços.
