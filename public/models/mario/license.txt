@@ -1,0 +1,11 @@
+Model Information:
+* title:	Mario Rig
+* source:	https://sketchfab.com/3d-models/mario-rig-8e647915b47a41bf8432eb06d5ed19a4
+* author:	plumbear106 (https://sketchfab.com/plumbear106)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Mario Rig" (https://sketchfab.com/3d-models/mario-rig-8e647915b47a41bf8432eb06d5ed19a4) by plumbear106 (https://sketchfab.com/plumbear106) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
