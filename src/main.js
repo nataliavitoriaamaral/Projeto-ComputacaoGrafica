@@ -10,6 +10,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { createMario, createLuigi } from './characters/Character.js';
 import { createRacer } from './characters/Racer.js';
 
+import { Track } from './track/Track.js';
+
 // caixa de erro visível na tela, pq às vezes o console tá fechado
 const errBox = document.createElement('div');
 Object.assign(errBox.style, {
@@ -47,9 +49,16 @@ scene.add(dir);
 
 scene.add(new THREE.GridHelper(10, 10));
 
+const track = new Track();
+scene.add(track);
+
 const camera = new THREE.PerspectiveCamera(
   50, window.innerWidth / window.innerHeight, 0.1, 100
 );
+//visualização do circuito completo
+// camera.position.set(0, 45, 75);
+// camera.lookAt(0, 0, 0);
+
 camera.position.set(5, 3, 6);
 camera.lookAt(0, 1, 0);
 
