@@ -16,6 +16,8 @@ import { createTireStack } from './objects/TireStack.js';
 import { createItemBox } from './objects/ItemBox.js';
 import { createOilSlick } from './objects/OilSlick.js';
 
+import { LightController } from './lighting/LightController.js';
+
 // caixa de erro visível na tela, pq às vezes o console está fechado
 const errBox = document.createElement('div');
 Object.assign(errBox.style, {
@@ -39,23 +41,28 @@ window.addEventListener('unhandledrejection', (e) =>
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x202830);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+//Controlador das luzes
+const lightController = new LightController(scene);
 
-const dir = new THREE.DirectionalLight(0xffffff, 1.2);
-dir.position.set(100, 80, 50);
-dir.target.position.set(10, 0, -30);
-dir.castShadow = true;
+
+//Comentando para adição do lightController
+// scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+
+// const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+// dir.position.set(100, 80, 50);
+// dir.target.position.set(10, 0, -30);
+// dir.castShadow = true;
 // cobre o circuito inteiro. O mapa maior ajuda nas sombras dos objetos pequenos
-dir.shadow.mapSize.set(4096, 4096);
-dir.shadow.camera.left = -115;
-dir.shadow.camera.right = 115;
-dir.shadow.camera.top = 115;
-dir.shadow.camera.bottom = -115;
-dir.shadow.camera.near = 0.5;
-dir.shadow.camera.far = 300;
-dir.shadow.normalBias = 0.02;
-scene.add(dir);
-scene.add(dir.target);
+// dir.shadow.mapSize.set(4096, 4096);
+// dir.shadow.camera.left = -115;
+// dir.shadow.camera.right = 115;
+// dir.shadow.camera.top = 115;
+// dir.shadow.camera.bottom = -115;
+// dir.shadow.camera.near = 0.5;
+// dir.shadow.camera.far = 300;
+// dir.shadow.normalBias = 0.02;
+// scene.add(dir);
+// scene.add(dir.target);
 
 const track = new Track();
 scene.add(track);
@@ -139,6 +146,8 @@ function placeRacer(racer, sideOffset, distanceBehind) {
 const cameraManager = new CameraManager(renderer.domElement, {
   gridPoint, gridTangent, gridNormal, path: track.path,
 });
+
+
 
 // "modo demo": [Espaço] faz os pilotos andarem pela pista, para mostrar
 // as câmeras de perseguição e do piloto em movimento
