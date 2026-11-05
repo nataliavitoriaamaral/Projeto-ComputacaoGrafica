@@ -16,10 +16,22 @@ Abre o endereço que o Vite imprimir no terminal (geralmente "http://localhost:5
 A página inicial mostra a pista com os pilotos e os objetos do cenário integrados.
 Para ver só o preview dos obstáculos e objetos, acesse `/obstaculos.html` no mesmo endereço.
 
-Controle da câmera com "OrbitControls": arrastar com o botão esquerdo para rotação,
-com o botão direito para translação e utilizar a roda de rolagem para zoom.
-As teclas **1**, **2** e **3** selecionam, respectivamente, as vistas da largada,
-do circuito completo e do trecho inicial com obstáculos.
+### Câmeras (Entrega 3)
+
+Todo o sistema de câmeras está em `src/cameras/CameraManager.js`.
+
+| Tecla | Ação |
+|-------|------|
+| **1** / **2** / **3** | Câmera livre (OrbitControls): largada, circuito completo, trecho com obstáculos |
+| **4** | Câmera de perseguição (3ª pessoa) atrás do Mario |
+| **5** | Câmera do piloto (1ª pessoa) |
+| **C** | Próxima câmera |
+| **Espaço** | Liga/desliga o modo demo (os pilotos andam pela pista) |
+| **+** / **-** | Diminui/aumenta o FOV da câmera ativa |
+| **P** | Alterna perspectiva/ortográfica (só para comparar o efeito da perspectiva) |
+| **H** | Esconde/mostra o HUD |
+
+Na câmera livre: botão esquerdo gira, botão direito move e a roda dá zoom.
 
 ## O que tem neste repositório
 
@@ -34,7 +46,9 @@ do circuito completo e do trecho inicial com obstáculos.
 
 ```
 src/
-  main.js                   # integra pista, pilotos, objetos, luz e câmeras
+  main.js                   # integra pista, pilotos, objetos e luz
+  cameras/
+    CameraManager.js        # câmeras, projeção perspectiva, HUD e teclas
   preview-obstaculos.js      # cena separada para visualizar os objetos
   characters/
     Kart.js                 # kart procedural
