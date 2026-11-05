@@ -3,13 +3,13 @@
 // localClippingEnabled precisa ser true, senão o Racer não corta
 
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { createMario, createLuigi } from './characters/Character.js';
 import { createRacer } from './characters/Racer.js';
 
 import { Track } from './track/Track.js';
+import { CameraManager } from './cameras/CameraManager.js';
 import { createCone } from './objects/Cone.js';
 import { createBarrel } from './objects/Barrel.js';
 import { createTireStack } from './objects/TireStack.js';
@@ -96,10 +96,6 @@ const itemBoxes = [];
   });
 });
 
-const camera = new THREE.PerspectiveCamera(
-  50, window.innerWidth / window.innerHeight, 0.1, 500
-);
-
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
@@ -119,8 +115,6 @@ document.body.appendChild(renderer.domElement);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-const controls = new OrbitControls(camera, renderer.domElement);
-
 // usa a posição e a direção da faixa pra alinhar os pilotos na largada
 const gridPoint = track.path.getPointAt(0);
 const gridTangent = track.path.getTangentAt(0).normalize();
@@ -135,44 +129,44 @@ function placeRacer(racer, sideOffset, distanceBehind) {
   racer.position.y = 0.01; // base das rodas na altura do asfalto
   // kart olha pra +Z; gira o conjunto pra apontar no sentido da largada
   racer.rotation.y = Math.atan2(gridTangent.x, gridTangent.z);
+  // posição na curva (0..1) e lado, usados pelo modo demo
+  racer.userData.u = (1 - distanceBehind / track.path.getLength()) % 1;
+  racer.userData.side = sideOffset;
 }
 
-// câmera atrás e ao lado dos pilotos, olhando pra região da largada
-function showStartView() {
-  camera.position.copy(gridPoint)
-    .addScaledVector(gridTangent, -14)
-    .addScaledVector(gridNormal, 7);
-  camera.position.y = 10;
-  controls.target.copy(gridPoint).addScaledVector(gridTangent, -3);
-  controls.target.y = 0.8;
-  controls.update();
-}
+// Entrega 3: todas as câmeras (livre, perseguição, piloto), a projeção
+// perspectiva e as teclas de troca ficam em src/cameras/CameraManager.js
+const cameraManager = new CameraManager(renderer.domElement, {
+  gridPoint, gridTangent, gridNormal, path: track.path,
+});
 
-// tecla 1 mostra a largada; tecla 2 mostra o circuito inteiro
-// tecla 3 mostra o primeiro trecho com cones e caixas de item
-// o mouse continua controlando a câmera pelo OrbitControls
+// "modo demo": [Espaço] faz os pilotos andarem pela pista, para mostrar
+// as câmeras de perseguição e do piloto em movimento
+const trackLength = track.path.getLength();
+const DEMO_SPEED = 14; // unidades por segundo
+let driving = false;
 window.addEventListener('keydown', (event) => {
-  if (event.key === '1') showStartView();
-  if (event.key === '2') {
-    // vista de cima, com espaço pra pista inteira aparecer
-    camera.position.set(10, 245, -10);
-    controls.target.set(10, 0, -30);
-    controls.update();
-  }
-  if (event.key === '3') {
-    const point = track.path.getPointAt(0.09);
-    const tangent = track.path.getTangentAt(0.09).normalize();
-    camera.position.copy(point).addScaledVector(tangent, -32);
-    camera.position.y = 36;
-    controls.target.copy(point);
-    controls.update();
+  if (event.code === 'Space') {
+    driving = !driving;
+    racers.forEach((r) => { r.speed = driving ? DEMO_SPEED : 0; });
+    event.preventDefault();
   }
 });
-showStartView();
+
+// avança um piloto pela curva, mantendo o deslocamento lateral do grid
+function driveRacer(racer, delta) {
+  racer.userData.u = (racer.userData.u + (DEMO_SPEED * delta) / trackLength + 1) % 1;
+  const u = racer.userData.u;
+  const tangent = track.path.getTangentAt(u).normalize();
+  const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
+  racer.position.copy(track.path.getPointAt(u))
+    .addScaledVector(normal, racer.userData.side);
+  racer.position.y = 0.01;
+  racer.rotation.y = Math.atan2(tangent.x, tangent.z);
+}
 
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+  cameraManager.resize(window.innerWidth, window.innerHeight);
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
@@ -182,13 +176,16 @@ const racers = [];
 renderer.setAnimationLoop(() => {
   const delta = clock.getDelta();
   const t = clock.elapsedTime;
-  racers.forEach((r) => r.update(delta));
+  racers.forEach((r) => {
+    if (driving) driveRacer(r, delta);
+    r.update(delta);
+  });
   itemBoxes.forEach((itemBox) => {
     itemBox.rotation.y += delta * 1.5;
     itemBox.position.y = 1 + Math.sin(t * 2) * 0.1;
   });
-  controls.update();
-  renderer.render(scene, camera);
+  cameraManager.update(delta);
+  renderer.render(scene, cameraManager.camera);
 });
 
 (async () => {
@@ -202,6 +199,7 @@ renderer.setAnimationLoop(() => {
     marioRacer.idleWheelSpeed = 4; // rodas girando no lugar, esperando o start
     scene.add(marioRacer);
     racers.push(marioRacer);
+    cameraManager.setFollowTarget(marioRacer); // câmeras 4 e 5 seguem o Mario
   } catch (e) {
     showErr('Mario falhou: ' + (e.stack || e.message));
   }
