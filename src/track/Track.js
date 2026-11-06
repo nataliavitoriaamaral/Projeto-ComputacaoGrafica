@@ -1,5 +1,6 @@
-// src/track/Track.js
-// Monta uma pista de corrida 3D estilo Mario Kart usando extrusão de curvas e primitivas do Three.js.
+// Track.js
+// Pista montada a partir de uma curva fechada (CatmullRomCurve3).
+// Asfalto, faixa central, zebras, muros e a largada seguem a mesma curva.
 
 import * as THREE from 'three';
 
@@ -7,14 +8,10 @@ export class Track extends THREE.Group {
   constructor() {
     super();
 
-    this.name = 'MarioKart_Track';
-    this.trackWidth = 12; // Largura do asfalto
+    this.name = 'Track';
+    this.trackWidth = 12;
     this.path = null;
 
-    this._build();
-  }
-
-  _build() {
     this._createPath();
     this._buildGround();
     this._buildAsphalt();
@@ -22,9 +19,10 @@ export class Track extends THREE.Group {
     this._buildKerbs();
     this._buildWalls();
     this._buildStartLine();
+    this._buildStartBanner();
   }
 
-  // Definição do circuito 3D através de pontos de controle
+  // pontos de controle do circuito
   _createPath() {
     const controlPoints = [
       new THREE.Vector3(  0, 0,   0),
@@ -36,27 +34,26 @@ export class Track extends THREE.Group {
       new THREE.Vector3(-40, 0,  30),
     ];
 
-    // Curva fechada e suave
+    // true = curva fechada
     this.path = new THREE.CatmullRomCurve3(controlPoints, true, 'centripetal');
   }
 
-  // Terreno de grama estendido ao redor
   _buildGround() {
     const geo = new THREE.PlaneGeometry(300, 300);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x2e8b57, // Verde grama
+      color: 0x2e8b57,
       roughness: 0.85,
       metalness: 0.05,
     });
 
     const ground = new THREE.Mesh(geo, mat);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.05; // Ligeiramente abaixo para evitar z-fighting com a pista
+    ground.position.y = -0.05; // um pouco abaixo da pista pra não dar z-fighting
     ground.receiveShadow = true;
     this.add(ground);
   }
 
-  // Asfalto gerado por extrusão de um perfil plano ao longo da curva 3D
+  // malha do asfalto: dois vértices (esquerda e direita) por ponto da curva
   _buildAsphalt() {
     const steps = 300;
     const points = this.path.getSpacedPoints(steps);
@@ -65,86 +62,69 @@ export class Track extends THREE.Group {
     const vertices = [];
     const indices = [];
 
-    // Gera os vértices da esquerda e da direita acompanhando a curva
     points.forEach((pt, i) => {
       const u = i / steps;
-      
-      // Pega a direção da pista e calcula o vetor lateral (normal) no plano XZ
+
+      // vetor lateral = tangente girada 90° no plano XZ
       const tangent = this.path.getTangentAt(u).normalize();
       const normal = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
 
-      // Desloca o ponto central para a borda esquerda
-      const leftPt = pt.clone().add(normal.clone().multiplyScalar(-halfW));
-      
-      // Desloca o ponto central para a borda direita
-      const rightPt = pt.clone().add(normal.clone().multiplyScalar(halfW));
+      const leftPt = pt.clone().addScaledVector(normal, -halfW);
+      const rightPt = pt.clone().addScaledVector(normal, halfW);
 
-      // Salva as coordenadas na lista de vértices
       vertices.push(leftPt.x, leftPt.y, leftPt.z);
       vertices.push(rightPt.x, rightPt.y, rightPt.z);
     });
 
-    // Conecta os vértices criando os triângulos que formam o asfalto
+    // dois triângulos entre cada par de amostras
     for (let i = 0; i < steps; i++) {
-      const v1 = i * 2;           // Esquerda atual
-      const v2 = i * 2 + 1;       // Direita atual
-      const v3 = (i + 1) * 2;     // Esquerda próximo
-      const v4 = (i + 1) * 2 + 1; // Direita próximo
+      const v1 = i * 2;           // esquerda atual
+      const v2 = i * 2 + 1;       // direita atual
+      const v3 = (i + 1) * 2;     // esquerda seguinte
+      const v4 = (i + 1) * 2 + 1; // direita seguinte
 
-      // Dois triângulos formando o  asfalto
       indices.push(v1, v2, v3);
       indices.push(v2, v4, v3);
     }
 
-    // Constrói a geometria final
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geo.setIndex(indices);
     geo.computeVertexNormals();
 
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x2b2b2b, // Cinza do asfalto
+      color: 0x2b2b2b,
       roughness: 0.8,
       metalness: 0.1,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
     });
 
     const asphalt = new THREE.Mesh(geo, mat);
-    asphalt.position.y = 0.01; // Levemente acima da grama 
+    asphalt.position.y = 0.01;
     asphalt.receiveShadow = true;
     this.add(asphalt);
   }
 
-  // Faixa Central Amarela Tracejada 
+  // faixa amarela tracejada no meio
   _buildCenterLine() {
-    const numDashes = 120; // Quantidade de traços ao longo da pista
+    const numDashes = 120;
     const points = this.path.getSpacedPoints(numDashes);
-    const dashGeo = new THREE.BoxGeometry(0.4, 0.02, 1.8); // Faixa fina e comprida
-    const dashMat = new THREE.MeshStandardMaterial({ 
-      color: 0xFFCC00, // Amarelo rodovia (ou 0xFFFFFF para branco)
-      roughness: 0.4 
-    });
+    const dashGeo = new THREE.BoxGeometry(0.4, 0.02, 1.8);
+    const dashMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.4 });
 
     points.forEach((pt, i) => {
-      // Pula alguns pontos para criar o efeito tracejado
-      if (i % 2 === 0) {
-        const u = i / numDashes;
-        const tangent = this.path.getTangentAt(u).normalize();
+      if (i % 2 !== 0) return; // pula um sim, um não
 
-        const dash = new THREE.Mesh(dashGeo, dashMat);
-        dash.position.copy(pt);
-        dash.position.y = 0.03; // Um pouco acima do asfalto para não sobrepor
-
-        // Orienta a faixa na direção da curva
-        const lookTarget = dash.position.clone().add(tangent);
-        dash.lookAt(lookTarget);
-
-        this.add(dash);
-      }
+      const tangent = this.path.getTangentAt(i / numDashes).normalize();
+      const dash = new THREE.Mesh(dashGeo, dashMat);
+      dash.position.copy(pt);
+      dash.position.y = 0.03;
+      dash.lookAt(dash.position.clone().add(tangent));
+      this.add(dash);
     });
   }
 
-  // Zebras laterais  alternadas ao longo das bordas
+  // zebras vermelhas e brancas nas duas bordas
   _buildKerbs() {
     const numKerbs = 200;
     const points = this.path.getSpacedPoints(numKerbs);
@@ -153,30 +133,19 @@ export class Track extends THREE.Group {
     const kerbHeight = 0.12;
 
     const kerbGeo = new THREE.BoxGeometry(kerbWidth, kerbHeight, kerbLength);
-
-    const redMat = new THREE.MeshStandardMaterial({ color: 0xC8102E, roughness: 0.5 });
-    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.5 });
+    const redMat = new THREE.MeshStandardMaterial({ color: 0xc8102e, roughness: 0.5 });
+    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
 
     points.forEach((pt, i) => {
-      const u = i / numKerbs;
-      const tangent = this.path.getTangentAt(u).normalize();
-      
-      // Vetor normal perpendicular no plano XZ
+      const tangent = this.path.getTangentAt(i / numKerbs).normalize();
       const normal = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
-      const mat = (i % 2 === 0) ? redMat : whiteMat;
+      const mat = i % 2 === 0 ? redMat : whiteMat;
 
-      // Coloca zebras nos dois lados da pista
       [-1, 1].forEach((side) => {
         const kerb = new THREE.Mesh(kerbGeo, mat);
-        const offset = normal.clone().multiplyScalar(side * (this.trackWidth / 2 + kerbWidth / 2));
-        
-        kerb.position.copy(pt).add(offset);
+        kerb.position.copy(pt).addScaledVector(normal, side * (this.trackWidth / 2 + kerbWidth / 2));
         kerb.position.y = kerbHeight / 2;
-
-        // Orienta a zebra para acompanhar a tangente da curva
-        const lookTarget = kerb.position.clone().add(tangent);
-        kerb.lookAt(lookTarget);
-
+        kerb.lookAt(kerb.position.clone().add(tangent));
         kerb.castShadow = true;
         kerb.receiveShadow = true;
         this.add(kerb);
@@ -184,7 +153,6 @@ export class Track extends THREE.Group {
     });
   }
 
-  // Muros externos de proteção 
   _buildWalls() {
     const numWallSegments = 180;
     const points = this.path.getSpacedPoints(numWallSegments);
@@ -192,20 +160,14 @@ export class Track extends THREE.Group {
     const wallMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
 
     points.forEach((pt, i) => {
-      const u = i / numWallSegments;
-      const tangent = this.path.getTangentAt(u).normalize();
+      const tangent = this.path.getTangentAt(i / numWallSegments).normalize();
       const normal = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
 
       [-1, 1].forEach((side) => {
         const wall = new THREE.Mesh(wallGeo, wallMat);
-        const offset = normal.clone().multiplyScalar(side * (this.trackWidth / 2 + 1.8));
-
-        wall.position.copy(pt).add(offset);
+        wall.position.copy(pt).addScaledVector(normal, side * (this.trackWidth / 2 + 1.8));
         wall.position.y = 0.6;
-
-        const lookTarget = wall.position.clone().add(tangent);
-        wall.lookAt(lookTarget);
-
+        wall.lookAt(wall.position.clone().add(tangent));
         wall.castShadow = true;
         wall.receiveShadow = true;
         this.add(wall);
@@ -213,7 +175,7 @@ export class Track extends THREE.Group {
     });
   }
 
-  // Linha de Chegada / Largada Xadrez 
+  // faixa quadriculada no chão, em u = 0
   _buildStartLine() {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 128;
@@ -222,7 +184,7 @@ export class Track extends THREE.Group {
 
     for (let x = 0; x < 4; x++) {
       for (let y = 0; y < 4; y++) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? '#FFFFFF' : '#000000';
+        ctx.fillStyle = (x + y) % 2 === 0 ? '#ffffff' : '#000000';
         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
       }
     }
@@ -239,24 +201,88 @@ export class Track extends THREE.Group {
       side: THREE.DoubleSide,
     });
 
-    const geo = new THREE.PlaneGeometry(this.trackWidth, 3);
-    const startLine = new THREE.Mesh(geo, mat);
+    const startLine = new THREE.Mesh(new THREE.PlaneGeometry(this.trackWidth, 3), mat);
 
-    // Posição inicial da curva (u = 0)
     const startPt = this.path.getPointAt(0);
     const tangent = this.path.getTangentAt(0).normalize();
 
     startLine.position.copy(startPt);
-    startLine.position.y = 0.02; // Levemente acima do asfalto
+    startLine.position.y = 0.02;
     startLine.rotation.x = -Math.PI / 2;
-
-    // Rotaciona a linha para alinhar perpendicularmente com a pista
-    const angle = Math.atan2(tangent.x, tangent.z);
-    startLine.rotation.z = -angle;
+    // gira no plano do chão pra ficar atravessada na pista
+    startLine.rotation.z = -Math.atan2(tangent.x, tangent.z);
 
     this.add(startLine);
   }
 
-  // Método opcional para animar algo na pista se necessário
-  update(delta) {}
+  // pórtico em cima da linha de chegada: dois postes e uma faixa com o letreiro
+  _buildStartBanner() {
+    const banner = new THREE.Group();
+    banner.name = 'StartBanner';
+
+    const span = this.trackWidth + 6; // distância entre os postes (fora dos muros)
+    const height = 6;                 // altura da faixa
+
+    // postes
+    const postMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.5, metalness: 0.3 });
+    const postGeo = new THREE.CylinderGeometry(0.3, 0.3, height + 1, 16);
+    [-1, 1].forEach((side) => {
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(side * span / 2, (height + 1) / 2, 0);
+      post.castShadow = true;
+      banner.add(post);
+    });
+
+    // faixa: uma caixa achatada com a textura desenhada no canvas
+    const tex = this._makeBannerTexture();
+    const signMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 });
+    const sideMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6 });
+    // ordem das faces da BoxGeometry: +x, -x, +y, -y, +z, -z
+    const sign = new THREE.Mesh(
+      new THREE.BoxGeometry(span, 2.2, 0.3),
+      [sideMat, sideMat, sideMat, sideMat, signMat, signMat]
+    );
+    sign.position.y = height;
+    sign.castShadow = true;
+    banner.add(sign);
+
+    // posiciona o grupo na largada, atravessado na pista
+    const startPt = this.path.getPointAt(0);
+    const tangent = this.path.getTangentAt(0).normalize();
+    banner.position.copy(startPt);
+    banner.rotation.y = Math.atan2(tangent.x, tangent.z);
+
+    this.add(banner);
+  }
+
+  // xadrez em cima e embaixo, texto no meio
+  _makeBannerTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    const tile = 16;
+
+    ctx.fillStyle = '#c8102e';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // duas fileiras de xadrez no topo e duas na base
+    for (let x = 0; x < canvas.width / tile; x++) {
+      for (let row = 0; row < 2; row++) {
+        ctx.fillStyle = (x + row) % 2 === 0 ? '#ffffff' : '#000000';
+        ctx.fillRect(x * tile, row * tile, tile, tile);
+        ctx.fillRect(x * tile, canvas.height - (row + 1) * tile, tile, tile);
+      }
+    }
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 64px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('START', canvas.width / 2, canvas.height / 2 + 4);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
 }

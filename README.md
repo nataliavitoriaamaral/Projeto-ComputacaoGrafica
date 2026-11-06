@@ -1,6 +1,6 @@
 # Mario Kart 3D
 
-Trabalho de computação gráfica. Versão simplificada de Mario Kart em 3D feita com Three.js. 
+Trabalho de computação gráfica. Versão simplificada de Mario Kart em 3D feita com Three.js.
 
 ## Como rodar
 
@@ -27,6 +27,8 @@ Todo o sistema de câmeras está em `src/cameras/CameraManager.js`.
 | **5** | Câmera do piloto (1ª pessoa) |
 | **C** | Próxima câmera |
 | **Espaço** | Liga/desliga o modo demo (os pilotos andam pela pista) |
+| **L** | Liga/desliga a luz ambiente |
+| **K** | Liga/desliga a luz direcional (sol e sombras) |
 | **+** / **-** | Diminui/aumenta o FOV da câmera ativa |
 | **P** | Alterna perspectiva/ortográfica (só para comparar o efeito da perspectiva) |
 | **H** | Esconde/mostra o HUD |
@@ -38,8 +40,9 @@ Na câmera livre: botão esquerdo gira, botão direito move e a roda dá zoom.
 - **Karts** modelados proceduralmente com primitivas do Three.js (BoxGeometry, CylinderGeometry, TorusGeometry, etc.) agrupadas em hierarquia. Cores e detalhes diferentes por personagem (Mario vermelho com 3 escapamentos cilíndricos, Luigi verde com 2 escapamentos cônicos).
 - **Personagens** carregados de arquivos ".gltf" baixados do Sketchfab. O loader faz um reparo nos materiais e nas meshes espelhadas que vieram quebradas.
 - **Rodas** giram em função da velocidade usando 'ω = v/r'.
-- Como os modelos vêm em T-pose , "sentar" o personagem é simulado afundando o quadril até o nível do assento e usando um clipping plane horizontal pra esconder tudo que fica abaixo.
+- Como os modelos vêm em T-pose, "sentar" o personagem é simulado afundando o quadril até o nível do assento e usando um clipping plane horizontal pra esconder tudo que fica abaixo.
 - **Obstáculos e objetos do cenário** feitos só com primitivas (cone, barril, pilha de pneus, caixa de item e mancha de óleo), em "src/objects/". Cada um é uma função que retorna um THREE.Group.
+- **Pórtico de largada** em cima da linha de chegada: dois postes (CylinderGeometry) e uma faixa (BoxGeometry) com o letreiro "START" desenhado num canvas.
 - **Integração com a pista** usando pontos e tangentes da curva (getPointAt e getTangentAt) para posicionar e orientar pilotos e objetos. Deslocamentos laterais distribuem os elementos pela largura da pista. As caixas de item flutuam com "Math.sin" e giram no loop de animação. 
 
 ## Estrutura
@@ -56,7 +59,7 @@ src/
     Racer.js                # junta kart + personagem 
   objects/                  # cone, barril, pneus, caixa de item, óleo
   track/
-    Track.js                # pista, grama, zebras, muros e faixa de largada
+    Track.js                # pista, grama, zebras, muros, faixa e pórtico de largada
 public/
   models/mario/scene.gltf
   models/luigi/scene.gltf
@@ -64,5 +67,5 @@ public/
 
 ## Observações
 
-- O relatório do trabalho está em [RELATORIO.md](RELATORIO.md).
-- As mãos dos personagens atravessam a lateral da carroceria, porque os modelos vêm em T-pose e ainda não mexemos nos ossos dos braços.
+- Os relatórios de cada entrega estão na raiz do repositório, em PDF.
+- Os braços saem da T-pose com uma IK de dois ossos (em `Racer.js`) que leva as mãos até o volante. O volante ainda não gira nas curvas.

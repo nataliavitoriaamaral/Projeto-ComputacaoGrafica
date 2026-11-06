@@ -27,7 +27,7 @@ Object.assign(errBox.style, {
 });
 document.body.appendChild(errBox);
 const showErr = (msg) => {
-  console.error('[preview]', msg);
+  console.error(msg);
   errBox.style.display = 'block';
   errBox.textContent += msg + '\n';
 };
@@ -39,7 +39,8 @@ window.addEventListener('unhandledrejection', (e) =>
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x202830);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+scene.add(ambient);
 
 const dir = new THREE.DirectionalLight(0xffffff, 1.2);
 dir.position.set(100, 80, 50);
@@ -56,6 +57,13 @@ dir.shadow.camera.far = 300;
 dir.shadow.normalBias = 0.02;
 scene.add(dir);
 scene.add(dir.target);
+
+// [L] liga/desliga a luz ambiente e [K] a direcional, pra ver o que cada uma faz
+window.addEventListener('keydown', (event) => {
+  const k = event.key.toLowerCase();
+  if (k === 'l') ambient.visible = !ambient.visible;
+  if (k === 'k') dir.visible = !dir.visible;
+});
 
 const track = new Track();
 scene.add(track);
@@ -114,6 +122,9 @@ document.body.appendChild(renderer.domElement);
 // env map pra iluminar áreas sem luz direta (sem isso o Luigi ficou muito escuro)
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+// mais fraco que o padrão, senão ele ilumina quase tudo sozinho e não dá
+// pra ver a diferença quando a gente desliga as luzes ([L] e [K])
+scene.environmentIntensity = 0.3;
 
 // usa a posição e a direção da faixa pra alinhar os pilotos na largada
 const gridPoint = track.path.getPointAt(0);

@@ -12,13 +12,14 @@ export class Character extends THREE.Group {
     targetHeight = 1.4,
     texturesDir,
     name = 'Character',
-    debug = false,
     materialMapMirrors = [],
+    arms = [],
   }) {
     super();
     this.name = name;
     this.targetHeight = targetHeight;
-    this._debug = debug;
+    // nomes dos ossos de cada braço: [ombro, cotovelo, pulso]
+    this.arms = arms;
     this._materialMapMirrors = materialMapMirrors;
 
     this._url = url;
@@ -54,18 +55,11 @@ export class Character extends THREE.Group {
     this._groundFeet();
 
     await this._patchMissingMaps();
-    await this._patchMissingMaps();
     if (this._materialMapMirrors.length) {
-        this._mirrorMaterialMap(this._materialMapMirrors);
+      this._mirrorMaterialMap(this._materialMapMirrors);
     }
-    this._fixMaterialVisibility();
     this._fixMaterialVisibility();
     this._fixMirroredMeshes();
-
-    if (this._debug) {
-      this._logMeshStats();
-      this._logEyeStats();
-    }
 
     this.add(this.model);
     return this;
@@ -179,8 +173,7 @@ export class Character extends THREE.Group {
       const src = materials.get(srcName);
       const dst = materials.get(dstName);
       if (!src || !dst) {
-        console.warn(`[${this.name}] mirrorMaterialMap: par ${srcName}/${dstName} incompleto`,
-          { srcFound: !!src, dstFound: !!dst });
+        console.warn(`${this.name}: material ${srcName} ou ${dstName} não encontrado`);
         continue;
       }
       if (src.map && !dst.map) {
@@ -193,13 +186,12 @@ export class Character extends THREE.Group {
         dst.color.setHex(0xffffff);
         if (src.normalMap) dst.normalMap = src.normalMap;
         dst.needsUpdate = true;
-        if (this._debug) {
-          console.log(`[${this.name}] copiou textura: ${srcName} -> ${dstName}`);
-        }
       }
     }
   }
 
+  // alguns materiais vinham transparentes ou só com uma face; força todos a
+  // aparecerem dos dois lados e sem transparência
   _fixMaterialVisibility() {
     this.model.traverse((obj) => {
       if (!obj.isMesh) return;
@@ -221,6 +213,8 @@ export class Character extends THREE.Group {
     });
   }
 
+  // meshes com escala negativa (determinante < 0) ficam com os triângulos
+  // virados pro lado errado; troca a ordem dos vértices pra corrigir
   _fixMirroredMeshes() {
     this.model.updateMatrixWorld(true);
 
@@ -254,75 +248,7 @@ export class Character extends THREE.Group {
       }
 
       g.computeVertexNormals();
-
-      if (this._debug) {
-        console.log(`[${this.name}] winding invertido em: ${obj.name} (det=${det.toFixed(3)})`);
-      }
     });
-  }
-
-  _logMeshStats() {
-    const bbox = new THREE.Box3();
-    const center = new THREE.Vector3();
-    const size = new THREE.Vector3();
-
-    console.group(`[${this.name}] meshes`);
-    this.model.traverse((obj) => {
-      if (!obj.isMesh) return;
-      bbox.setFromObject(obj);
-      bbox.getCenter(center);
-      bbox.getSize(size);
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-      const matInfo = mats.map((m) =>
-        m ? `${m.name || '?'}:${m.map ? 'com_map' : 'sem_map'}` : 'null'
-      ).join(' | ');
-      console.log(
-        `${(obj.name || '?').padEnd(12)}  ` +
-        `cx=${center.x.toFixed(3)} cy=${center.y.toFixed(3)} cz=${center.z.toFixed(3)}  ` +
-        `sx=${size.x.toFixed(3)} sy=${size.y.toFixed(3)} sz=${size.z.toFixed(3)}  ` +
-        `mats=[${matInfo}]`
-      );
-    });
-    console.groupEnd();
-  }
-
-  _logEyeStats() {
-    const eyeRegex = /eye|olho|pupil|iris|eyeball/i;
-    const bbox = new THREE.Box3();
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-
-    console.group(`[${this.name}] olhos`);
-    let n = 0;
-    this.model.traverse((obj) => {
-      if (!obj.isMesh) return;
-      const matName = Array.isArray(obj.material)
-        ? obj.material.map(m => m?.name || '').join(',')
-        : (obj.material?.name || '');
-      if (!eyeRegex.test(obj.name) && !eyeRegex.test(matName)) return;
-
-      n++;
-      obj.updateMatrixWorld(true);
-      bbox.setFromObject(obj);
-      bbox.getSize(size);
-      bbox.getCenter(center);
-      const det = obj.matrixWorld.determinant();
-      const verts = obj.geometry?.attributes?.position?.count ?? 0;
-
-      console.log({
-        name: obj.name,
-        mat: matName,
-        visible: obj.visible,
-        det: +det.toFixed(3),
-        verts,
-        bboxSize:   size.toArray().map(v => +v.toFixed(3)),
-        bboxCenter: center.toArray().map(v => +v.toFixed(3)),
-      });
-    });
-    if (n === 0) {
-      console.warn('nenhuma mesh de olho bateu o regex. ver nomes alternativos no grupo "meshes" acima.');
-    }
-    console.groupEnd();
   }
 }
 
@@ -331,6 +257,11 @@ export function createMario(overrides = {}) {
     name: 'Mario',
     url: '/models/mario/scene.gltf',
     targetHeight: 1.4,
+    // o GLTFLoader tira o ':' dos nomes ("mixamorig:LeftArm" vira "mixamorigLeftArm")
+    arms: [
+      ['mixamorigLeftArm_09', 'mixamorigLeftForeArm_010', 'mixamorigLeftHand_011'],
+      ['mixamorigRightArm_017', 'mixamorigRightForeArm_018', 'mixamorigRightHand_019'],
+    ],
     ...overrides,
   }).ready;
 }
@@ -341,6 +272,10 @@ export function createLuigi(overrides = {}) {
     url: '/models/luigi/scene.gltf',
     targetHeight: 1.5,
     materialMapMirrors: [['Material_51', 'Material_52']],
+    arms: [
+      ['L_upperarm_024', 'L_forearm_025', 'L_hand_026'],
+      ['R_upperarm_041', 'R_forearm_042', 'R_hand_043'],
+    ],
     ...overrides,
   }).ready;
 }

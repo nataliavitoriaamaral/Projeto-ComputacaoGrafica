@@ -1,5 +1,5 @@
 // preview-obstaculos.js
-// Preview so dos obstaculos/objetos, lado a lado 
+// Preview só dos obstáculos/objetos, lado a lado
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';

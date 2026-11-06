@@ -59,7 +59,6 @@ export class Kart extends THREE.Group {
     super();
 
     this.name   = `Kart_${preset}`;
-    this.preset = preset;
     this.config = PRESETS[preset] ?? PRESETS.mario;
 
     this.speed = 0;
@@ -70,7 +69,7 @@ export class Kart extends THREE.Group {
     this.wheelRadius = 0.32;
     this.wheelWidth  = 0.28;
 
-    // capô — guardado pra reusar no posicionamento do logo
+    // capô: guardado pra reusar no posicionamento do logo
     this.hoodTilt   = -0.60;
     this.hoodCenter = new THREE.Vector3(0, this.wheelRadius + 0.42, 0.68);
     this.hoodDepth  = 0.14;
