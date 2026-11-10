@@ -63,7 +63,7 @@ export function createBarrel() {
     }
   }
 
-  // tampa clara (mesma cor de antes)
+  // tampa clara
   const lidMat = new THREE.MeshStandardMaterial({
     color: 0xd9d9d9, roughness: 0.7, metalness: 0.1,
   });
@@ -79,7 +79,7 @@ export function createBarrel() {
   rim.position.y = H - 0.01;
   g.add(rim);
 
-  // fundo (nao aparece, mas fecha o corpo)
+  // fundo (não aparece, mas fecha o corpo)
   const bottom = new THREE.Mesh(
     new THREE.CircleGeometry(R_END, 32),
     new THREE.MeshStandardMaterial({ color: 0x8c2a20 })

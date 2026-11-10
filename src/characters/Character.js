@@ -12,15 +12,14 @@ export class Character extends THREE.Group {
     targetHeight = 1.4,
     texturesDir,
     name = 'Character',
-    debug = false,
-    cloneMirrorX = null,
     materialMapMirrors = [],
+    arms = [],
   }) {
     super();
     this.name = name;
     this.targetHeight = targetHeight;
-    this._debug = debug;
-    this._cloneMirrorX = cloneMirrorX;
+    // nomes dos ossos de cada braço: [ombro, cotovelo, pulso]
+    this.arms = arms;
     this._materialMapMirrors = materialMapMirrors;
 
     this._url = url;
@@ -56,20 +55,11 @@ export class Character extends THREE.Group {
     this._groundFeet();
 
     await this._patchMissingMaps();
-    await this._patchMissingMaps();
     if (this._materialMapMirrors.length) {
-        this._mirrorMaterialMap(this._materialMapMirrors);
+      this._mirrorMaterialMap(this._materialMapMirrors);
     }
-    this._fixMaterialVisibility();
     this._fixMaterialVisibility();
     this._fixMirroredMeshes();
-
-    if (this._cloneMirrorX) this._cloneMeshMirroredX(this._cloneMirrorX);
-
-    if (this._debug) {
-      this._logMeshStats();
-      this._logEyeStats();
-    }
 
     this.add(this.model);
     return this;
@@ -102,6 +92,11 @@ export class Character extends THREE.Group {
           url,
           (tex) => {
             tex.flipY = false;
+            // algumas meshes do Luigi (o branco do olho direito) têm UV > 1 e
+            // contam com a textura se repetindo. no modo clamp, que é o padrão
+            // do TextureLoader, elas só pegavam a borda transparente e sumiam.
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
             if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
             resolve(tex);
           },
@@ -163,6 +158,9 @@ export class Character extends THREE.Group {
     await Promise.all(pass3);
   }
 
+  // o Luigi veio sem o PNG de alguns materiais do lado direito. o lado direito
+  // é o espelho do esquerdo, então dá pra reaproveitar a textura do par que
+  // existe invertendo o eixo U: repeat.x = -1 e offset.x = 1 fazem u virar 1-u.
   _mirrorMaterialMap(pairs) {
     const materials = new Map();
     this.model.traverse((obj) => {
@@ -175,22 +173,25 @@ export class Character extends THREE.Group {
       const src = materials.get(srcName);
       const dst = materials.get(dstName);
       if (!src || !dst) {
-        console.warn(`[${this.name}] mirrorMaterialMap: par ${srcName}/${dstName} incompleto`,
-          { srcFound: !!src, dstFound: !!dst });
+        console.warn(`${this.name}: material ${srcName} ou ${dstName} não encontrado`);
         continue;
       }
       if (src.map && !dst.map) {
-        dst.map = src.map;
+        const mirrored = src.map.clone();
+        mirrored.repeat.x = -1;
+        mirrored.offset.x = 1;
+        mirrored.needsUpdate = true;
+
+        dst.map = mirrored;
         dst.color.setHex(0xffffff);
         if (src.normalMap) dst.normalMap = src.normalMap;
         dst.needsUpdate = true;
-        if (this._debug) {
-          console.log(`[${this.name}] copiou textura: ${srcName} -> ${dstName}`);
-        }
       }
     }
   }
 
+  // alguns materiais vinham transparentes ou só com uma face; força todos a
+  // aparecerem dos dois lados e sem transparência
   _fixMaterialVisibility() {
     this.model.traverse((obj) => {
       if (!obj.isMesh) return;
@@ -212,6 +213,8 @@ export class Character extends THREE.Group {
     });
   }
 
+  // meshes com escala negativa (determinante < 0) ficam com os triângulos
+  // virados pro lado errado; troca a ordem dos vértices pra corrigir
   _fixMirroredMeshes() {
     this.model.updateMatrixWorld(true);
 
@@ -245,116 +248,7 @@ export class Character extends THREE.Group {
       }
 
       g.computeVertexNormals();
-
-      if (this._debug) {
-        console.log(`[${this.name}] winding invertido em: ${obj.name} (det=${det.toFixed(3)})`);
-      }
     });
-  }
-
-  // tentativa de arrumar o olho direito do Luigi. Ainda não funciona direito, mas pelo menos não quebra o resto do modelo.
-  _cloneMeshMirroredX(meshName) {
-    const src = this.model.getObjectByName(meshName);
-    if (!src) {
-      console.warn(`[${this.name}] cloneMirrorX: mesh "${meshName}" não encontrada`);
-      return;
-    }
-
-    this.model.updateMatrixWorld(true);
-    const modelBox = new THREE.Box3().setFromObject(this.model);
-    const centerX = (modelBox.min.x + modelBox.max.x) / 2;
-
-    const srcWorld = new THREE.Vector3();
-    src.getWorldPosition(srcWorld);
-
-    const mirroredWorld = new THREE.Vector3(
-      2 * centerX - srcWorld.x,
-      srcWorld.y,
-      srcWorld.z
-    );
-
-    const clone = src.clone(true);
-    clone.name = (src.name || 'mesh') + '_mirrored';
-
-    src.parent.add(clone);
-    src.parent.updateMatrixWorld(true);
-    clone.position.copy(src.parent.worldToLocal(mirroredWorld.clone()));
-    clone.visible = true;
-    clone.frustumCulled = false;
-
-    if (this._debug) {
-      console.log(`[${this.name}] clonou mesh:`, {
-        de: src.name,
-        para: clone.name,
-        srcWorldX: +srcWorld.x.toFixed(3),
-        cloneWorldX: +mirroredWorld.x.toFixed(3),
-        centerX: +centerX.toFixed(3),
-      });
-    }
-  }
-
-  _logMeshStats() {
-    const bbox = new THREE.Box3();
-    const center = new THREE.Vector3();
-    const size = new THREE.Vector3();
-
-    console.group(`[${this.name}] meshes`);
-    this.model.traverse((obj) => {
-      if (!obj.isMesh) return;
-      bbox.setFromObject(obj);
-      bbox.getCenter(center);
-      bbox.getSize(size);
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-      const matInfo = mats.map((m) =>
-        m ? `${m.name || '?'}:${m.map ? 'com_map' : 'sem_map'}` : 'null'
-      ).join(' | ');
-      console.log(
-        `${(obj.name || '?').padEnd(12)}  ` +
-        `cx=${center.x.toFixed(3)} cy=${center.y.toFixed(3)} cz=${center.z.toFixed(3)}  ` +
-        `sx=${size.x.toFixed(3)} sy=${size.y.toFixed(3)} sz=${size.z.toFixed(3)}  ` +
-        `mats=[${matInfo}]`
-      );
-    });
-    console.groupEnd();
-  }
-
-  _logEyeStats() {
-    const eyeRegex = /eye|olho|pupil|iris|eyeball/i;
-    const bbox = new THREE.Box3();
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-
-    console.group(`[${this.name}] olhos`);
-    let n = 0;
-    this.model.traverse((obj) => {
-      if (!obj.isMesh) return;
-      const matName = Array.isArray(obj.material)
-        ? obj.material.map(m => m?.name || '').join(',')
-        : (obj.material?.name || '');
-      if (!eyeRegex.test(obj.name) && !eyeRegex.test(matName)) return;
-
-      n++;
-      obj.updateMatrixWorld(true);
-      bbox.setFromObject(obj);
-      bbox.getSize(size);
-      bbox.getCenter(center);
-      const det = obj.matrixWorld.determinant();
-      const verts = obj.geometry?.attributes?.position?.count ?? 0;
-
-      console.log({
-        name: obj.name,
-        mat: matName,
-        visible: obj.visible,
-        det: +det.toFixed(3),
-        verts,
-        bboxSize:   size.toArray().map(v => +v.toFixed(3)),
-        bboxCenter: center.toArray().map(v => +v.toFixed(3)),
-      });
-    });
-    if (n === 0) {
-      console.warn('nenhuma mesh de olho bateu o regex. ver nomes alternativos no grupo "meshes" acima.');
-    }
-    console.groupEnd();
   }
 }
 
@@ -363,6 +257,11 @@ export function createMario(overrides = {}) {
     name: 'Mario',
     url: '/models/mario/scene.gltf',
     targetHeight: 1.4,
+    // o GLTFLoader tira o ':' dos nomes ("mixamorig:LeftArm" vira "mixamorigLeftArm")
+    arms: [
+      ['mixamorigLeftArm_09', 'mixamorigLeftForeArm_010', 'mixamorigLeftHand_011'],
+      ['mixamorigRightArm_017', 'mixamorigRightForeArm_018', 'mixamorigRightHand_019'],
+    ],
     ...overrides,
   }).ready;
 }
@@ -373,6 +272,10 @@ export function createLuigi(overrides = {}) {
     url: '/models/luigi/scene.gltf',
     targetHeight: 1.5,
     materialMapMirrors: [['Material_51', 'Material_52']],
+    arms: [
+      ['L_upperarm_024', 'L_forearm_025', 'L_hand_026'],
+      ['R_upperarm_041', 'R_forearm_042', 'R_hand_043'],
+    ],
     ...overrides,
   }).ready;
 }

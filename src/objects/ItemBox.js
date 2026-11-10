@@ -1,6 +1,6 @@
 // ItemBox.js
 // Caixa de item com "?" (textura desenhada em canvas, igual ao logo do Kart).
-// Origem no centro da caixa (ela flutua e gira, ver Track.update).
+// Origem no centro da caixa. Ela flutua e gira no loop do main.js.
 
 import * as THREE from 'three';
 
