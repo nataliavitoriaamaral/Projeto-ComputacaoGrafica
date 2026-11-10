@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="rubber" x2="0" y2="1">
+      <stop stop-color="#292d31"/>
+      <stop offset=".5" stop-color="#111416"/>
+      <stop offset="1" stop-color="#303438"/>
+    </linearGradient>
+    <pattern id="tread" width="64" height="64" patternUnits="userSpaceOnUse">
+      <rect width="64" height="64" fill="url(#rubber)"/>
+      <path d="M-12 8 8-12h24L12 8zm32 32 20-20h24L44 40zM-12 72l20-20h24L12 72z" fill="#444a4e"/>
+      <path d="m8 8 20-20h5L13 8zm32 32 20-20h5L45 40zM8 72l20-20h5L13 72z" fill="#080a0b"/>
+      <path d="M0 31h64M0 33h64" stroke="#080a0b" stroke-width="3"/>
+    </pattern>
+  </defs>
+  <rect width="512" height="512" fill="url(#tread)"/>
+  <path d="M0 4h512M0 508h512" stroke="#555b60" stroke-opacity=".4" stroke-width="5"/>
+</svg>

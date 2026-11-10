@@ -35,42 +35,12 @@ Na câmera livre: botão esquerdo gira, botão direito move e a roda dá zoom.
 
 ## O que tem neste repositório
 
-- **Karts** modelados proceduralmente com primitivas do Three.js (BoxGeometry, CylinderGeometry, TorusGeometry, etc.) agrupadas em hierarquia. Cores e detalhes diferentes por personagem (Mario vermelho com 3 escapamentos cilíndricos, Luigi verde com 2 escapamentos cônicos).
-- **Personagens** carregados de arquivos ".gltf" baixados do Sketchfab. O loader faz um reparo nos materiais e nas meshes espelhadas que vieram quebradas.
-- **Rodas** giram em função da velocidade usando 'ω = v/r'.
-- Como os modelos vêm em T-pose, "sentar" o personagem é simulado afundando o quadril até o nível do assento e usando um clipping plane horizontal pra esconder tudo que fica abaixo.
-- **Obstáculos e objetos do cenário** feitos só com primitivas (cone, barril, pilha de pneus, caixa de item e mancha de óleo), em "src/objects/". Cada um é uma função que retorna um THREE.Group.
-- **Pórtico de largada** em cima da linha de chegada: dois postes (CylinderGeometry) e uma faixa (BoxGeometry) com o letreiro "START" desenhado num canvas.
-- **Integração com a pista** usando pontos e tangentes da curva (getPointAt e getTangentAt) para posicionar e orientar pilotos e objetos. Deslocamentos laterais distribuem os elementos pela largura da pista. As caixas de item flutuam com "Math.sin" e giram no loop de animação. 
-- **Modo demo** (tecla Espaço): cada piloto guarda a posição na curva (`userData.u`) e o deslocamento lateral (`userData.side`), e a cada frame avança 14 unidades por segundo pela pista. Serve para mostrar as câmeras de perseguição e de piloto em movimento, com as rodas girando de acordo com a velocidade.
-
-### Câmeras
-
-Todo o sistema de câmeras está em `src/cameras/CameraManager.js`. Cada vista tem a sua própria `PerspectiveCamera`:
-
-| Vista | FOV | Comportamento |
-|-------|-----|---------------|
-| Livre (teclas 1, 2 e 3) | 50° | OrbitControls, com posições pré-definidas na largada, no circuito inteiro e nos obstáculos |
-| Perseguição (tecla 4) | 65° | 8 unidades atrás e 3,4 acima do Mario, com suavização (lerp) |
-| Piloto (tecla 5) | 80° | Presa ao kart do Mario, na altura dos olhos |
-
-O OrbitControls só fica ativo nas vistas livres. O HUD no canto da tela mostra a câmera ativa, a projeção e o FOV.
-
-A matriz de projeção perspectiva é definida em `CameraManager._makeCamera()` (`new THREE.PerspectiveCamera(fov, aspect, near, far)`, que chama `updateProjectionMatrix()`) e recalculada em `resize()` e `changeFov()`. Ela é aplicada em `renderer.render(scene, cameraManager.camera)`, no loop de animação do `main.js`. Com `near = 0.1` e `far = 500`. A tecla **P** troca para uma `OrthographicCamera` com o mesmo enquadramento no ponto de referência, só para comparar o efeito da perspectiva.
-
-### Iluminação
-
-As luzes ficam em `src/lighting/LightController.js`, que cria as fontes e as guarda em `lights`:
-
-| Fonte | Tipo | Detalhes |
-|-------|------|----------|
-| `ambient` | AmbientLight | branca, intensidade 0,3 |
-| `sun` | DirectionalLight | tom quente, intensidade 1,2, em (50, 100, 50), com sombras (mapa 2048) |
-| `trackSpot` | SpotLight | azul, intensidade 2,0, em (0, 20, 0) sobre a linha de largada, com sombras |
-
-Além delas, a cena usa um mapa de ambiente (`RoomEnvironment`) criado no `main.js`, que ilumina as áreas sem luz direta (sem ele o Luigi ficava escuro). Ele não faz parte do `LightController` e continua ativo se as outras luzes forem desligadas.
-
-Para isolar a contribuição de cada fonte, o controlador tem `toggleLight(nome, ligado)` e `setIntensity(nome, intensidade)`. Existem também atalhos de teclado em `setupKeyboardShortcuts()` (**8** ambiente, **9** sol, **0** holofote), mas ainda não estão ligados no `main.js`.
+- **Karts** modelados proceduralmente com primitivas do Three.js (`BoxGeometry`, `CylinderGeometry`, `TorusGeometry`, etc.) agrupadas em hierarquia. Cores e detalhes diferentes por personagem (Mario vermelho com 3 escapamentos cilíndricos, Luigi verde com 2 escapamentos cônicos).
+- **Personagens** carregados de arquivos `.gltf` baixados do Sketchfab (licença CC-BY, créditos abaixo). O loader faz um reparo nos materiais e nas meshes espelhadas que vieram quebradas.
+- **Rodas** giram em função da velocidade usando `ω = v/r`.
+- Como os modelos vêm em T-pose (pernas retas), "sentar" o personagem é simulado afundando o quadril até o nível do assento e usando um `clipping plane` horizontal pra esconder tudo que fica abaixo.
+- **Obstáculos e objetos do cenário** feitos só com primitivas (cone, barril, pilha de pneus, caixa de item e mancha de óleo), em `src/objects/`. Cada um é uma função que retorna um `THREE.Group`.
+- **Texturas dos obstáculos**: cones, barris, pneus e manchas de óleo usam imagens SVG em `public/textures/`, aplicadas como mapas dos materiais iluminados. As geometrias `CylinderGeometry`, `LatheGeometry`, `TorusGeometry`, `BoxGeometry` e `CircleGeometry` geram coordenadas UV normalizadas no intervalo [0, 1]; o eixo U percorre a superfície ao redor das peças curvas, e V percorre sua altura ou seção. As peças foram ampliadas sem invadir as faixas de circulação. Use `/obstaculos.html` para observar os materiais sob luz e sombra.
 
 ## Estrutura
 

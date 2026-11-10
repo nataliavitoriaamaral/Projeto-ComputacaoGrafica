@@ -3,13 +3,16 @@
 // diferentes, material escuro e brilhante. Fica rente ao chão.
 
 import * as THREE from 'three';
+import { loadObstacleTexture } from './loadObstacleTexture.js';
 
 export function createOilSlick() {
   const g = new THREE.Group();
   g.name = 'OilSlick';
 
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x0b0b12, roughness: 0.12, metalness: 0.4,
+    map: loadObstacleTexture('oil-slick'),
+    roughness: 0.12, metalness: 0.4,
+    transparent: true, opacity: 0.9, depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   });
 

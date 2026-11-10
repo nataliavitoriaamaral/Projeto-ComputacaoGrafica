@@ -1,13 +1,14 @@
 // Barrel.js
 // Barril vermelho abaulado: corpo (LatheGeometry), 2 aros cinza que acompanham
 // a curva, rebites (SphereGeometry) e tampa clara com borda (TorusGeometry).
-// Origem no chão. Altura 0.9, raio máximo 0.38.
+// Origem no chão. Altura 1.05, raio máximo 0.43.
 
 import * as THREE from 'three';
+import { loadObstacleTexture } from './loadObstacleTexture.js';
 
-const H = 0.9;        // altura
-const R_END = 0.29;   // raio nas pontas (topo e base)
-const R_MID = 0.38;   // raio no meio (barriga)
+const H = 1.05;       // altura
+const R_END = 0.33;   // raio nas pontas (topo e base)
+const R_MID = 0.43;   // raio no meio (barriga)
 
 // raio do barril numa altura y (parábola: R_MID no centro, R_END nas pontas)
 function radiusAt(y) {
@@ -27,7 +28,8 @@ export function createBarrel() {
     profile.push(new THREE.Vector2(radiusAt(y), y));
   }
   const bodyMat = new THREE.MeshStandardMaterial({
-    color: 0xc0392b, roughness: 0.8, metalness: 0.0, side: THREE.DoubleSide,
+    map: loadObstacleTexture('barrel-wood'),
+    roughness: 0.8, metalness: 0.0, side: THREE.DoubleSide,
   });
   const body = new THREE.Mesh(new THREE.LatheGeometry(profile, 36), bodyMat);
   body.castShadow = body.receiveShadow = true;
@@ -41,10 +43,10 @@ export function createBarrel() {
     color: 0xb0b0b0, roughness: 0.6, metalness: 0.3,
   });
 
-  for (const yc of [0.2, 0.7]) {
+  for (const yc of [0.24, 0.81]) {
     const pts = [];
     for (let i = 0; i <= 6; i++) {
-      const y = yc - 0.06 + (i / 6) * 0.12;
+      const y = yc - 0.07 + (i / 6) * 0.14;
       pts.push(new THREE.Vector2(radiusAt(y) + 0.012, y));
     }
     const band = new THREE.Mesh(new THREE.LatheGeometry(pts, 36), bandMat);
@@ -55,7 +57,7 @@ export function createBarrel() {
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * Math.PI * 2;
       const r = radiusAt(yc) + 0.016;
-      const rivet = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 10), rivetMat);
+      const rivet = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 10), rivetMat);
       rivet.position.set(Math.cos(a) * r, yc, Math.sin(a) * r);
       g.add(rivet);
     }
