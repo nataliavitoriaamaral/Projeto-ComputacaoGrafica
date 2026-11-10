@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="oil">
+      <stop offset="0" stop-color="#3d294c" stop-opacity=".96"/>
+      <stop offset=".48" stop-color="#153b3b" stop-opacity=".94"/>
+      <stop offset=".78" stop-color="#39321d" stop-opacity=".88"/>
+      <stop offset="1" stop-color="#101319" stop-opacity=".16"/>
+    </radialGradient>
+    <clipPath id="puddle">
+      <path d="M256 15C372 8 492 92 498 211c7 111-78 220-196 268C188 517 39 443 16 319-7 196 85 60 196 25c20-6 40-9 60-10z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#puddle)">
+    <rect width="512" height="512" fill="url(#oil)"/>
+    <path d="M-30 180c98-76 147 80 245 4s143-54 316 10M-20 312c86-68 153 89 245 15s174-72 318 0"
+      fill="none" stroke="#8c4c9d" stroke-opacity=".5" stroke-width="18"/>
+    <path d="M-20 205c103-57 157 74 251 2s158-54 302 12M-20 340c95-58 154 71 248 7s168-69 299-3"
+      fill="none" stroke="#61aaa0" stroke-opacity=".44" stroke-width="8"/>
+    <path d="M82 112c76-42 119-35 178-12M273 407c57-23 103-58 139-103"
+      fill="none" stroke="#e2bb67" stroke-opacity=".45" stroke-width="6"/>
+  </g>
+</svg>
