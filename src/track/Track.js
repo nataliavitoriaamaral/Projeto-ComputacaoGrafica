@@ -5,11 +5,12 @@
 import * as THREE from 'three';
 
 export class Track extends THREE.Group {
-  constructor() {
+  constructor(config) {
     super();
 
     this.name = 'Track';
-    this.trackWidth = 12;
+    this.config = config;
+    this.trackWidth = config.trackWidth;
     this.path = null;
 
     this._createPath();
@@ -23,25 +24,16 @@ export class Track extends THREE.Group {
   }
 
   // pontos de controle do circuito
+  //puxa o config do trackConfigs.js e cria a curva fechada
   _createPath() {
-    const controlPoints = [
-      new THREE.Vector3(  0, 0,   0),
-      new THREE.Vector3( 50, 0,  20),
-      new THREE.Vector3( 90, 0, -30),
-      new THREE.Vector3( 50, 0, -90),
-      new THREE.Vector3(-30, 0, -80),
-      new THREE.Vector3(-70, 0, -20),
-      new THREE.Vector3(-40, 0,  30),
-    ];
-
-    // true = curva fechada
-    this.path = new THREE.CatmullRomCurve3(controlPoints, true, 'centripetal');
+    this.path = new THREE.CatmullRomCurve3(this.config.controlPoints, true, 'centripetal');
   }
 
+  // constrói o chão do circuito
   _buildGround() {
-    const geo = new THREE.PlaneGeometry(300, 300);
+    const geo = new THREE.PlaneGeometry(400, 400);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x2e8b57,
+      color: this.config.groundColor,
       roughness: 0.85,
       metalness: 0.05,
     });
@@ -93,7 +85,7 @@ export class Track extends THREE.Group {
     geo.computeVertexNormals();
 
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x2b2b2b,
+      color: this.config.asphaltColor,
       roughness: 0.8,
       metalness: 0.1,
       side: THREE.DoubleSide,
@@ -133,8 +125,8 @@ export class Track extends THREE.Group {
     const kerbHeight = 0.12;
 
     const kerbGeo = new THREE.BoxGeometry(kerbWidth, kerbHeight, kerbLength);
-    const redMat = new THREE.MeshStandardMaterial({ color: 0xc8102e, roughness: 0.5 });
-    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+    const redMat = new THREE.MeshStandardMaterial({ color: this.config.kerbRed, roughness: 0.5 });
+    const whiteMat = new THREE.MeshStandardMaterial({ color: this.config.kerbWhite, roughness: 0.5 });
 
     points.forEach((pt, i) => {
       const tangent = this.path.getTangentAt(i / numKerbs).normalize();
@@ -157,7 +149,7 @@ export class Track extends THREE.Group {
     const numWallSegments = 180;
     const points = this.path.getSpacedPoints(numWallSegments);
     const wallGeo = new THREE.BoxGeometry(0.5, 1.2, 2.0);
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
+    const wallMat = new THREE.MeshStandardMaterial({ color: this.config.wallColor, roughness: 0.7 });
 
     points.forEach((pt, i) => {
       const tangent = this.path.getTangentAt(i / numWallSegments).normalize();
@@ -202,7 +194,6 @@ export class Track extends THREE.Group {
     });
 
     const startLine = new THREE.Mesh(new THREE.PlaneGeometry(this.trackWidth, 3), mat);
-
     const startPt = this.path.getPointAt(0);
     const tangent = this.path.getTangentAt(0).normalize();
 
@@ -285,4 +276,17 @@ export class Track extends THREE.Group {
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }
+  // Método para liberar a memória da GPU ao remover a pista da cena
+  dispose() {
+    this.traverse((child) => {
+      if (child.isMesh) {
+        child.geometry.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach((mat) => mat.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
+  }  
 }

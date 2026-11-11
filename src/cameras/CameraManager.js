@@ -260,6 +260,7 @@ export class CameraManager {
       '[C] próxima câmera   [P] perspectiva/ortográfica',
       '[+/-] FOV   [Espaço] pilotos andam   [H] esconde HUD',
       '[L] luz ambiente   [K] luz direcional',
+      '[P] Alterna Pista',
     ];
     this.hud.textContent = lines.join('\n');
   }

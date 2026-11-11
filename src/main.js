@@ -9,6 +9,7 @@ import { createMario, createLuigi } from './characters/Character.js';
 import { createRacer } from './characters/Racer.js';
 
 import { Track } from './track/Track.js';
+import { TRACK_CONFIGS } from './track/trackConfigd.js';
 import { CameraManager } from './cameras/CameraManager.js';
 import { createCone } from './objects/Cone.js';
 import { createBarrel } from './objects/Barrel.js';
@@ -41,38 +42,21 @@ window.addEventListener('unhandledrejection', (e) =>
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x202830);
 
-const ambient = new THREE.AmbientLight(0xffffff, 0.9);
-scene.add(ambient);
+const lightController = new LightController(scene);
 
+let currentTrackIndex = 0;
+let track = null;
+let trackLength = 0;
 
-//Comentando para adição do lightController
-// scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+// Vetores globais do grid (usados pelos pilotos e câmeras)
+let gridPoint = new THREE.Vector3();
+let gridTangent = new THREE.Vector3();
+let gridNormal = new THREE.Vector3();
 
-// const dir = new THREE.DirectionalLight(0xffffff, 1.2);
-// dir.position.set(100, 80, 50);
-// dir.target.position.set(10, 0, -30);
-// dir.castShadow = true;
-// cobre o circuito inteiro. O mapa maior ajuda nas sombras dos objetos pequenos
-// dir.shadow.mapSize.set(4096, 4096);
-// dir.shadow.camera.left = -115;
-// dir.shadow.camera.right = 115;
-// dir.shadow.camera.top = 115;
-// dir.shadow.camera.bottom = -115;
-// dir.shadow.camera.near = 0.5;
-// dir.shadow.camera.far = 300;
-// dir.shadow.normalBias = 0.02;
-// scene.add(dir);
-// scene.add(dir.target);
-
-// [L] liga/desliga a luz ambiente e [K] a direcional, pra ver o que cada uma faz
-window.addEventListener('keydown', (event) => {
-  const k = event.key.toLowerCase();
-  if (k === 'l') ambient.visible = !ambient.visible;
-  if (k === 'k') dir.visible = !dir.visible;
-});
-
-const track = new Track();
-scene.add(track);
+// Listas para gerenciar descarte e atualização dos objetos cênicos da pista
+const trackObjects = [];
+const itemBoxes = [];
+const racers = [];
 
 // posiciona os objetos pela curva, com deslocamento lateral e altura
 function placeObject(object, u, sideOffset, height = 0.01) {
@@ -84,31 +68,54 @@ function placeObject(object, u, sideOffset, height = 0.01) {
   object.position.y += height;
   object.rotation.y = Math.atan2(tangent.x, tangent.z);
   scene.add(object);
+
+  //salva o objeto para removar após trocar de pista, senão ele fica flutuando no ar
+  trackObjects.push(object);
 }
 
-// cones e barris perto das bordas, sem fechar a passagem dos karts
-[0.08, 0.09].forEach((u) => {
-  placeObject(createCone(), u, 4.5);
-});
-placeObject(createCone(), 0.72, -4.5);
-placeObject(createBarrel(), 0.3, -4.5);
-placeObject(createBarrel(), 0.76, 4.5);
+function populateTrackObjects() {
+  // Cones e barris perto das bordas
+  [0.08, 0.09].forEach((u) => {
+    placeObject(createCone(), u, 4.5);
+  });
+  placeObject(createCone(), 0.72, -4.5);
+  placeObject(createBarrel(), 0.3, -4.5);
+  placeObject(createBarrel(), 0.76, 4.5);
 
-// pneus na lateral e óleo no asfalto, longe do grid de largada
-placeObject(createTireStack(), 0.38, 5);
-placeObject(createTireStack(), 0.86, -5);
-placeObject(createOilSlick(), 0.24, -1.8);
-placeObject(createOilSlick(), 0.64, 2);
+  // Pneus na lateral e óleo no asfalto
+  placeObject(createTireStack(), 0.38, 5);
+  placeObject(createTireStack(), 0.86, -5);
+  placeObject(createOilSlick(), 0.24, -1.8);
+  placeObject(createOilSlick(), 0.64, 2);
+
+  // Caixas de itens flutuando
+  [0.15, 0.55].forEach((u) => {
+    [-3, 0, 3].forEach((sideOffset) => {
+      const itemBox = createItemBox();
+      placeObject(itemBox, u, sideOffset, 1);
+      itemBoxes.push(itemBox);
+    });
+  });
+}
 
 // caixas flutuando acima da pista; a animação é a mesma do preview
-const itemBoxes = [];
-[0.15, 0.55].forEach((u) => {
-  [-3, 0, 3].forEach((sideOffset) => {
-    const itemBox = createItemBox();
-    placeObject(itemBox, u, sideOffset, 1);
-    itemBoxes.push(itemBox);
+function clearTrackObjects() {
+  trackObjects.forEach((obj) => {
+    scene.remove(obj);
+    obj.traverse((child) => {
+      if (child.isMesh) {
+        child.geometry?.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach((mat) => mat.dispose());
+        } else {
+          child.material?.dispose();
+        }
+      }
+    });
   });
-});
+  trackObjects.length = 0;
+  itemBoxes.length = 0;
+}
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -132,11 +139,10 @@ scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 // pra ver a diferença quando a gente desliga as luzes ([L] e [K])
 scene.environmentIntensity = 0.3;
 
-// usa a posição e a direção da faixa pra alinhar os pilotos na largada
-const gridPoint = track.path.getPointAt(0);
-const gridTangent = track.path.getTangentAt(0).normalize();
-// vetor lateral da pista, igual ao usado nas zebras e nos muros
-const gridNormal = new THREE.Vector3(-gridTangent.z, 0, gridTangent.x);
+// câmera e controles de câmera ficam em src/cameras/CameraManager.js
+const cameraManager = new CameraManager(renderer.domElement, {
+  gridPoint, gridTangent, gridNormal, path: null,
+});
 
 // desloca cada piloto pro lado e pra trás da faixa de largada
 function placeRacer(racer, sideOffset, distanceBehind) {
@@ -147,28 +153,70 @@ function placeRacer(racer, sideOffset, distanceBehind) {
   // kart olha pra +Z; gira o conjunto pra apontar no sentido da largada
   racer.rotation.y = Math.atan2(gridTangent.x, gridTangent.z);
   // posição na curva (0..1) e lado, usados pelo modo demo
-  racer.userData.u = (1 - distanceBehind / track.path.getLength()) % 1;
+  if (track) {
+    racer.userData.u = (1 - distanceBehind / track.path.getLength()) % 1;
+  } else {
+    racer.userData.u = 0;
+  }
   racer.userData.side = sideOffset;
+  racer.userData.distanceBehind = distanceBehind;
 }
 
 // Entrega 3: todas as câmeras (livre, perseguição, piloto), a projeção
 // perspectiva e as teclas de troca ficam em src/cameras/CameraManager.js
-const cameraManager = new CameraManager(renderer.domElement, {
-  gridPoint, gridTangent, gridNormal, path: track.path,
-});
+function loadTrack(index) {
+  // 1. Limpa a pista antiga
+  if (track) {
+    scene.remove(track);
+    if (typeof track.dispose === 'function') track.dispose();
+  }
+
+  // 2. Limpa os objetos cênicos anteriores
+  clearTrackObjects();
+
+  // 3. Instancia a nova pista a partir da configuração
+  const config = TRACK_CONFIGS[index];
+  track = new Track(config);
+  scene.add(track);
+
+  // 4. Recalcula os dados matemáticos do circuito
+  trackLength = track.path.getLength();
+  gridPoint.copy(track.path.getPointAt(0));
+  gridTangent.copy(track.path.getTangentAt(0)).normalize();
+  gridNormal.set(-gridTangent.z, 0, gridTangent.x);
+
+  // 5. Repopula a nova pista com objetos
+  populateTrackObjects();
+
+  // 6. Reposiciona os pilotos no novo grid de largada
+  racers.forEach((racer) => {
+    placeRacer(racer, racer.userData.side, racer.userData.distanceBehind);
+  });
+
+  // 7. Atualiza as referências de curva no CameraManager
+  if (cameraManager) {
+    cameraManager.path = track.path;
+    cameraManager.gridPoint = gridPoint;
+    cameraManager.gridTangent = gridTangent;
+    cameraManager.gridNormal = gridNormal;
+  }
+}
 
 
 
 // "modo demo": [Espaço] faz os pilotos andarem pela pista, para mostrar
-// as câmeras de perseguição e do piloto em movimento
-const trackLength = track.path.getLength();
+// // as câmeras de perseguição e do piloto em movimento
 const DEMO_SPEED = 14; // unidades por segundo
 let driving = false;
+
 window.addEventListener('keydown', (event) => {
   if (event.code === 'Space') {
     driving = !driving;
     racers.forEach((r) => { r.speed = driving ? DEMO_SPEED : 0; });
     event.preventDefault();
+  }else if (event.key === 'p' || event.key === 'P') {
+    currentTrackIndex = (currentTrackIndex + 1) % TRACK_CONFIGS.length;
+    loadTrack(currentTrackIndex);
   }
 });
 
@@ -190,7 +238,6 @@ window.addEventListener('resize', () => {
 });
 
 const clock = new THREE.Clock();
-const racers = [];
 
 renderer.setAnimationLoop(() => {
   const delta = clock.getDelta();
@@ -236,4 +283,6 @@ renderer.setAnimationLoop(() => {
   } catch (e) {
     showErr('Luigi falhou: ' + (e.stack || e.message));
   }
+
+  loadTrack(currentTrackIndex);
 })();

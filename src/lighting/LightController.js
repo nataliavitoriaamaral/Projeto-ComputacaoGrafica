@@ -6,6 +6,7 @@ export class LightController {
         this.lights = {};
         
         this.initLights();
+        this.setupKeyboardShortcuts();
         //this.scene.environment = null;
     }
 
@@ -45,19 +46,19 @@ export class LightController {
     setupKeyboardShortcuts() {
         window.addEventListener('keydown', (event) => {
             // Alterna Luz Ambiente
-            if (event.key === '8') {
+            if (event.key === 'L' || event.key === 'l') {
                 this.lights.ambient.visible = !this.lights.ambient.visible;
                 console.log('Luz Ambiente:', this.lights.ambient.visible ? 'ON' : 'OFF');
             }
             // Alterna Luz Direcional (Sol)
-            if (event.key === '9') {
+            if (event.key === 'K' || event.key === 'k') {
                 this.lights.sun.visible = !this.lights.sun.visible;
                 console.log('Luz Direcional:', this.lights.sun.visible ? 'ON' : 'OFF');
             }
             // Alterna Spotlight
             if (event.key === '0') {
-                this.lights.spot.visible = !this.lights.spot.visible;
-                console.log('Spotlight:', this.lights.spot.visible ? 'ON' : 'OFF');
+                this.lights.trackSpot.visible = !this.lights.trackSpot.visible;
+                console.log('Spotlight:', this.lights.trackSpot.visible ? 'ON' : 'OFF');
             }
         });
     }    
