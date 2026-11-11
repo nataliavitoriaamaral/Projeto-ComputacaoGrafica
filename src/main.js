@@ -214,7 +214,7 @@ window.addEventListener('keydown', (event) => {
     driving = !driving;
     racers.forEach((r) => { r.speed = driving ? DEMO_SPEED : 0; });
     event.preventDefault();
-  }else if (event.key === 'p' || event.key === 'P') {
+  }else if (event.key === 'Enter' ) {
     currentTrackIndex = (currentTrackIndex + 1) % TRACK_CONFIGS.length;
     loadTrack(currentTrackIndex);
   }
