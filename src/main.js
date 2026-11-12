@@ -181,6 +181,7 @@ function loadTrack(index) {
   gridPoint.copy(grid.point);
   gridTangent.copy(grid.tangent);
   gridNormal.copy(grid.normal);
+  lightController.setTrack(track);
 
   // 5. Repopula a nova pista com objetos
   populateTrackObjects();
@@ -190,7 +191,7 @@ function loadTrack(index) {
 
   // 7. Atualiza a curva usada pelo CameraManager (os vetores do grid já
   //    foram atualizados no lugar, no passo 4)
-  if (cameraManager) cameraManager.path = track.path;
+  if (cameraManager) cameraManager.setTrack(track.path, track.trackWidth);
 }
 
 loadTrack(currentTrackIndex);
@@ -198,7 +199,7 @@ loadTrack(currentTrackIndex);
 // Entrega 3: todas as câmeras (livre, perseguição, piloto), a projeção
 // perspectiva e as teclas de troca ficam em src/cameras/CameraManager.js
 cameraManager = new CameraManager(renderer.domElement, {
-  gridPoint, gridTangent, gridNormal, path: track.path,
+  gridPoint, gridTangent, gridNormal, path: track.path, trackWidth: track.trackWidth,
 });
 
 // "modo demo": [Espaço] faz os pilotos andarem pela pista, para mostrar

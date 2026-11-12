@@ -15,13 +15,14 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 const NEAR = 0.1;
-const FAR = 500;
+const FAR = 1000; // inclui a paisagem ao fundo na vista geral
 
 export class CameraManager {
-  constructor(domElement, { gridPoint, gridTangent, gridNormal, path }) {
+  constructor(domElement, { gridPoint, gridTangent, gridNormal, path, trackWidth = 12 }) {
     this.aspect = window.innerWidth / window.innerHeight;
     this.grid = { point: gridPoint, tangent: gridTangent, normal: gridNormal };
     this.path = path;
+    this.trackWidth = trackWidth;
 
     // o piloto que as câmeras de perseguição/primeira pessoa acompanham
     this.followTarget = null;
@@ -82,10 +83,20 @@ export class CameraManager {
     this._chaseReady = false;
   }
 
+  // recalcula o enquadramento quando a pista muda
+  setTrack(path, trackWidth) {
+    this.path = path;
+    this.trackWidth = trackWidth;
+    this._chaseReady = false;
+    this.setView(this.view.id);
+  }
+
   // troca de vista
   setView(id) {
     const index = this.views.findIndex((v) => v.id === id);
     if (index < 0) return;
+    const keepOrtho = this.orthoMode && id !== 'driver';
+    if (this.orthoMode) this.toggleOrtho();
     this.activeIndex = index;
     if (id === 'driver') this.orthoMode = false;
     const { orbit } = this.views[index];
@@ -95,6 +106,10 @@ export class CameraManager {
     if (id === 'circuito') this._presetOverview();
     if (id === 'obstaculos') this._presetObstacles();
     if (id === 'chase') this._chaseReady = false; // posiciona direto, sem "voar" até lá
+
+    if (id === 'chase') this._updateChase(0);
+    if (id === 'driver') this._updateDriver();
+    if (keepOrtho) this.toggleOrtho();
 
     this._refreshHud();
   }
@@ -107,18 +122,47 @@ export class CameraManager {
   _presetStart() {
     const { point, tangent, normal } = this.grid;
     this.orbitCamera.position.copy(point)
-      .addScaledVector(tangent, -14)
-      .addScaledVector(normal, 7);
-    this.orbitCamera.position.y = 10;
-    this.controls.target.copy(point).addScaledVector(tangent, -3);
+      .addScaledVector(tangent, -20)
+      .addScaledVector(normal, 10);
+    this.orbitCamera.position.y = 12;
+    this.controls.target.copy(point).addScaledVector(tangent, -6);
     this.controls.target.y = 0.8;
+    this._adjustPortraitView();
     this.controls.update();
   }
 
   _presetOverview() {
-    this.orbitCamera.position.set(10, 245, -10);
-    this.controls.target.set(10, 0, -30);
+    // mede a curva e inclui as bordas, em vez de usar uma posição fixa
+    const bounds = new THREE.Box3().setFromPoints(this.path.getSpacedPoints(300));
+    bounds.expandByScalar(this.trackWidth / 2 + 3);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const direction = new THREE.Vector3(0, 1, 0.12).normalize();
+    const up = new THREE.Vector3(0, 0.12, -1).normalize();
+    const tanV = Math.tan(THREE.MathUtils.degToRad(this.orbitCamera.fov / 2));
+    const tanH = tanV * this.aspect;
+    let distance = 0;
+    // cada canto precisa caber tanto na largura quanto na altura da projeção
+    for (const x of [bounds.min.x, bounds.max.x]) {
+      for (const y of [bounds.min.y, bounds.max.y]) {
+        for (const z of [bounds.min.z, bounds.max.z]) {
+          const offset = new THREE.Vector3(x, y, z).sub(center);
+          const depth = offset.dot(direction);
+          distance = Math.max(distance,
+            Math.abs(offset.x) / tanH + depth,
+            Math.abs(offset.dot(up)) / tanV + depth);
+        }
+      }
+    }
+    this.controls.target.copy(center);
+    this.orbitCamera.position.copy(center).addScaledVector(direction, distance * 1.1);
     this.controls.update();
+  }
+
+  // compensa a largura menor da janela sem distorcer a projeção
+  _adjustPortraitView() {
+    const offset = this.orbitCamera.position.clone().sub(this.controls.target);
+    this.orbitCamera.position.copy(this.controls.target)
+      .addScaledVector(offset, Math.max(1, 1 / this.aspect));
   }
 
   _presetObstacles() {
@@ -127,6 +171,7 @@ export class CameraManager {
     this.orbitCamera.position.copy(point).addScaledVector(tangent, -32);
     this.orbitCamera.position.y = 36;
     this.controls.target.copy(point);
+    this._adjustPortraitView();
     this.controls.update();
   }
 
@@ -138,7 +183,8 @@ export class CameraManager {
     else if (id === 'driver') this._updateDriver();
     else this.controls.update();
 
-    if (this.orthoMode) this._syncOrtho();
+    // na vista livre o OrbitControls atua diretamente na câmera ortográfica
+    if (this.orthoMode && !this.view.orbit) this._syncOrtho();
   }
 
   // 3ª pessoa: a câmera vai atrás do kart com suavização (lerp) para não
@@ -186,7 +232,8 @@ export class CameraManager {
 
     // usa a mesma altura que a perspectiva enxerga na distância do ponto de
     // referência, para que ele apareça do mesmo tamanho nas duas projeções
-    const d = src.position.distanceTo(ref);
+    const forward = src.getWorldDirection(new THREE.Vector3());
+    const d = Math.max(NEAR, ref.clone().sub(src.position).dot(forward));
     const h = d * Math.tan(THREE.MathUtils.degToRad(src.fov / 2));
     const w = h * this.aspect;
     Object.assign(this.orthoCamera, { left: -w, right: w, top: h, bottom: -h });
@@ -198,25 +245,54 @@ export class CameraManager {
   toggleOrtho() {
     // na vista do piloto o chão fica rente ao horizonte: não serve de comparação
     if (this.view.id === 'driver') return;
-    this.orthoMode = !this.orthoMode;
+    if (!this.orthoMode) {
+      this._syncOrtho();
+      this.orthoCamera.zoom = 1;
+      this.orthoCamera.updateProjectionMatrix();
+      this.orthoMode = true;
+      if (this.view.orbit) this.controls.object = this.orthoCamera;
+    } else {
+      if (this.view.orbit) {
+        // converte o zoom ortográfico em distância na perspectiva
+        const offset = this.orthoCamera.position.clone().sub(this.controls.target);
+        this.orbitCamera.position.copy(this.controls.target)
+          .addScaledVector(offset, 1 / this.orthoCamera.zoom);
+        this.orbitCamera.quaternion.copy(this.orthoCamera.quaternion);
+      }
+      this.orthoMode = false;
+      this.controls.object = this.orbitCamera;
+    }
+    if (this.view.orbit) this.controls.update();
     this._refreshHud();
   }
 
   // FOV maior = mais "grande angular", mais distorção nas bordas;
   // FOV menor = "zoom", perspectiva mais achatada
   changeFov(step) {
+    const keepOrtho = this.orthoMode;
+    if (keepOrtho) this.toggleOrtho();
     const cam = this.view.camera;
     cam.fov = THREE.MathUtils.clamp(cam.fov + step, 20, 120);
     cam.updateProjectionMatrix(); // recalcula a matriz de projeção
+    if (keepOrtho) this.toggleOrtho();
     this._refreshHud();
   }
 
   resize(width, height) {
+    const previousAspect = this.aspect;
     this.aspect = width / height;
     [this.orbitCamera, this.chaseCamera, this.driverCamera].forEach((cam) => {
       cam.aspect = this.aspect;
       cam.updateProjectionMatrix();
     });
+    // preserva o zoom e a posição escolhidos pelo usuário na vista ortográfica
+    if (this.orthoMode && this.view.orbit) {
+      this.orthoCamera.left *= this.aspect / previousAspect;
+      this.orthoCamera.right *= this.aspect / previousAspect;
+      this.orthoCamera.updateProjectionMatrix();
+    } else if (this.view.id === 'circuito') {
+      this._presetOverview();
+    }
   }
 
   // teclado
@@ -259,7 +335,7 @@ export class CameraManager {
       '',
       '[C] próxima câmera   [P] perspectiva/ortográfica',
       '[+/-] FOV   [Espaço] pilotos andam   [H] esconde HUD',
-      '[L] luz ambiente   [K] luz direcional',
+      '[L] ambiente   [K] sol   [0] holofote',
       '[Enter] Alterna Pista',
     ];
     this.hud.textContent = lines.join('\n');
