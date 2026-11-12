@@ -1,15 +1,18 @@
 // main.js
-// Integração da pista com Mario e Luigi no grid de largada.
+// Integração da pista com Mario, Luigi, Peach e Bowser no grid de largada.
 // localClippingEnabled precisa ser true, senão o Racer não corta
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
-import { createMario, createLuigi } from './characters/Character.js';
+import { createMario, createLuigi, createPeach, createBowser } from './characters/Character.js';
 import { createRacer } from './characters/Racer.js';
 
 import { Track } from './track/Track.js';
 import { TRACK_CONFIGS } from './track/trackConfigd.js';
+import { StartingGrid } from './track/StartingGrid.js';
+import { Scenery } from './scenery/Scenery.js';
+import { disposeObject } from './utils/dispose.js';
 import { CameraManager } from './cameras/CameraManager.js';
 import { createCone } from './objects/Cone.js';
 import { createBarrel } from './objects/Barrel.js';
@@ -19,7 +22,7 @@ import { createOilSlick } from './objects/OilSlick.js';
 
 import { LightController } from './lighting/LightController.js';
 
-// caixa de erro visível na tela, pq às vezes o console está fechado
+// caixa de erro visível na tela, para quando o console estiver fechado
 const errBox = document.createElement('div');
 Object.assign(errBox.style, {
   position: 'fixed', top: '8px', left: '8px',
@@ -40,18 +43,21 @@ window.addEventListener('unhandledrejection', (e) =>
   showErr('unhandledrejection: ' + (e.reason?.stack || e.reason)));
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x202830);
+scene.background = new THREE.Color(); // a cor vem do skyColor de cada pista
 
 const lightController = new LightController(scene);
 
 let currentTrackIndex = 0;
 let track = null;
+let grid = null; // grid de largada da pista atual (src/track/StartingGrid.js)
+let scenery = null; // paisagem da pista atual (src/scenery/Scenery.js)
 let trackLength = 0;
 
-// Vetores globais do grid (usados pelos pilotos e câmeras)
-let gridPoint = new THREE.Vector3();
-let gridTangent = new THREE.Vector3();
-let gridNormal = new THREE.Vector3();
+// Vetores do grid, compartilhados com o CameraManager. São atualizados com
+// copy() a cada troca de pista, para a câmera continuar com as mesmas referências.
+const gridPoint = new THREE.Vector3();
+const gridTangent = new THREE.Vector3();
+const gridNormal = new THREE.Vector3();
 
 // Listas para gerenciar descarte e atualização dos objetos cênicos da pista
 const trackObjects = [];
@@ -98,20 +104,11 @@ function populateTrackObjects() {
   });
 }
 
-// caixas flutuando acima da pista; a animação é a mesma do preview
+// remove os objetos da pista anterior e libera a memória deles
 function clearTrackObjects() {
   trackObjects.forEach((obj) => {
     scene.remove(obj);
-    obj.traverse((child) => {
-      if (child.isMesh) {
-        child.geometry?.dispose();
-        if (Array.isArray(child.material)) {
-          child.material.forEach((mat) => mat.dispose());
-        } else {
-          child.material?.dispose();
-        }
-      }
-    });
+    disposeObject(obj);
   });
   trackObjects.length = 0;
   itemBoxes.length = 0;
@@ -132,44 +129,37 @@ renderer.localClippingEnabled = true;
 renderer.domElement.style.display = 'block';
 document.body.appendChild(renderer.domElement);
 
-// env map pra iluminar áreas sem luz direta (sem isso o Luigi ficou muito escuro)
+// env map para iluminar áreas sem luz direta (sem ele o Luigi ficava muito escuro)
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-// mais fraco que o padrão, senão ele ilumina quase tudo sozinho e não dá
-// pra ver a diferença quando a gente desliga as luzes ([L] e [K])
+// intensidade menor que a padrão; caso contrário ele ilumina quase tudo e não é possível
+// perceber a diferença ao desligar as luzes ([L] e [K])
 scene.environmentIntensity = 0.3;
 
-// câmera e controles de câmera ficam em src/cameras/CameraManager.js
-const cameraManager = new CameraManager(renderer.domElement, {
-  gridPoint, gridTangent, gridNormal, path: null,
-});
+// pilotos na ordem do grid; cada um precisa de um preset em kartPresets.js
+const ROSTER = [
+  { name: 'Mario',  kartPreset: 'mario',  characterFactory: createMario  },
+  { name: 'Luigi',  kartPreset: 'luigi',  characterFactory: createLuigi  },
+  { name: 'Peach',  kartPreset: 'peach',  characterFactory: createPeach  },
+  { name: 'Bowser', kartPreset: 'bowser', characterFactory: createBowser },
+];
 
-// desloca cada piloto pro lado e pra trás da faixa de largada
-function placeRacer(racer, sideOffset, distanceBehind) {
-  racer.position.copy(gridPoint)
-    .addScaledVector(gridNormal, sideOffset)
-    .addScaledVector(gridTangent, -distanceBehind);
-  racer.position.y = 0.01; // base das rodas na altura do asfalto
-  // kart olha pra +Z; gira o conjunto pra apontar no sentido da largada
-  racer.rotation.y = Math.atan2(gridTangent.x, gridTangent.z);
-  // posição na curva (0..1) e lado, usados pelo modo demo
-  if (track) {
-    racer.userData.u = (1 - distanceBehind / track.path.getLength()) % 1;
-  } else {
-    racer.userData.u = 0;
-  }
-  racer.userData.side = sideOffset;
-  racer.userData.distanceBehind = distanceBehind;
-}
+// criado depois da primeira pista, para já nascer com o grid certo
+let cameraManager = null;
 
-// Entrega 3: todas as câmeras (livre, perseguição, piloto), a projeção
-// perspectiva e as teclas de troca ficam em src/cameras/CameraManager.js
 function loadTrack(index) {
-  // 1. Limpa a pista antiga
+  // 1. Limpa a pista, o grid e a paisagem antigos
   if (track) {
     scene.remove(track);
-    if (typeof track.dispose === 'function') track.dispose();
+    track.dispose();
   }
+  if (grid) {
+    scene.remove(grid);
+    disposeObject(grid);
+  }
+  // a paisagem só sai da cena: as geometrias e os materiais dela são
+  // compartilhados e voltam a ser usados quando a pista aparecer de novo
+  if (scenery) scene.remove(scenery);
 
   // 2. Limpa os objetos cênicos anteriores
   clearTrackObjects();
@@ -179,30 +169,37 @@ function loadTrack(index) {
   track = new Track(config);
   scene.add(track);
 
-  // 4. Recalcula os dados matemáticos do circuito
+  // paisagem e cor do céu de acordo com o tema da pista
+  scenery = new Scenery(track, config.scenery);
+  scene.add(scenery);
+  scene.background.set(config.skyColor);
+
+  // 4. Novo grid de largada e dados do circuito
+  grid = new StartingGrid(track, { slots: ROSTER.length });
+  scene.add(grid);
   trackLength = track.path.getLength();
-  gridPoint.copy(track.path.getPointAt(0));
-  gridTangent.copy(track.path.getTangentAt(0)).normalize();
-  gridNormal.set(-gridTangent.z, 0, gridTangent.x);
+  gridPoint.copy(grid.point);
+  gridTangent.copy(grid.tangent);
+  gridNormal.copy(grid.normal);
 
   // 5. Repopula a nova pista com objetos
   populateTrackObjects();
 
-  // 6. Reposiciona os pilotos no novo grid de largada
-  racers.forEach((racer) => {
-    placeRacer(racer, racer.userData.side, racer.userData.distanceBehind);
-  });
+  // 6. Reposiciona os pilotos nas suas vagas do novo grid
+  racers.forEach((racer) => grid.placeRacer(racer, racer.userData.slot));
 
-  // 7. Atualiza as referências de curva no CameraManager
-  if (cameraManager) {
-    cameraManager.path = track.path;
-    cameraManager.gridPoint = gridPoint;
-    cameraManager.gridTangent = gridTangent;
-    cameraManager.gridNormal = gridNormal;
-  }
+  // 7. Atualiza a curva usada pelo CameraManager (os vetores do grid já
+  //    foram atualizados no lugar, no passo 4)
+  if (cameraManager) cameraManager.path = track.path;
 }
 
+loadTrack(currentTrackIndex);
 
+// Entrega 3: todas as câmeras (livre, perseguição, piloto), a projeção
+// perspectiva e as teclas de troca ficam em src/cameras/CameraManager.js
+cameraManager = new CameraManager(renderer.domElement, {
+  gridPoint, gridTangent, gridNormal, path: track.path,
+});
 
 // "modo demo": [Espaço] faz os pilotos andarem pela pista, para mostrar
 // // as câmeras de perseguição e do piloto em movimento
@@ -254,35 +251,18 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, cameraManager.camera);
 });
 
-(async () => {
+// carregamento em paralelo; uma falha não interrompe os demais
+ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
   try {
-    const marioRacer = await createRacer({
-      kartPreset: 'mario',
-      characterFactory: createMario,
-    });
-    placeRacer(marioRacer, -2.5, 3.5);
-    marioRacer.speed = 0;          // parado na largada
-    marioRacer.idleWheelSpeed = 4; // rodas girando no lugar, esperando o start
-    scene.add(marioRacer);
-    racers.push(marioRacer);
-    cameraManager.setFollowTarget(marioRacer); // câmeras 4 e 5 seguem o Mario
+    const racer = await createRacer({ kartPreset, characterFactory });
+    racer.userData.slot = slot; // usado para reposicionar ao trocar de pista
+    grid.placeRacer(racer, slot);
+    racer.speed = 0;          // parado na largada
+    racer.idleWheelSpeed = 4; // rodas girando no lugar, esperando o start
+    scene.add(racer);
+    racers.push(racer);
+    if (name === 'Mario') cameraManager.setFollowTarget(racer); // câmeras 4 e 5
   } catch (e) {
-    showErr('Mario falhou: ' + (e.stack || e.message));
+    showErr(`${name} falhou: ` + (e.stack || e.message));
   }
-
-  try {
-    const luigiRacer = await createRacer({
-      kartPreset: 'luigi',
-      characterFactory: () => createLuigi(),
-    });
-    placeRacer(luigiRacer, 2.5, 5);
-    luigiRacer.speed = 0;
-    luigiRacer.idleWheelSpeed = 4;
-    scene.add(luigiRacer);
-    racers.push(luigiRacer);
-  } catch (e) {
-    showErr('Luigi falhou: ' + (e.stack || e.message));
-  }
-
-  loadTrack(currentTrackIndex);
-})();
+});

@@ -1,65 +1,23 @@
 // Kart.js
 // Monta um kart estilo Mario Kart com primitivas do Three.js.
 // Rodas giram em update() usando omega = v/r.
+// As diferenças entre personagens ficam em kartPresets.js.
 
 import * as THREE from 'three';
-
-// cores e estilo de escapamento por personagem
-const PRESETS = {
-  mario: {
-    bodyColor:    0xC8102E,
-    accentColor:  0xFFFFFF,
-    lowerColor:   0x1A3A8E,
-    seatColor:    0x4A2A14,
-    logoLetter:   'M',
-    logoBgColor:  0xC8102E,
-    exhaustStyle: 'triple',
-    exhaustTipColor: 0xB8B8B8,
-  },
-  luigi: {
-    bodyColor:    0x2EB82E,
-    accentColor:  0xFFFFFF,
-    lowerColor:   0x3A2A8E,
-    seatColor:    0x151515,
-    logoLetter:   'L',
-    logoBgColor:  0x2EB82E,
-    exhaustStyle: 'twinCone',
-    exhaustTipColor: 0xE8D647,
-  },
-};
-
-// desenha um círculo branco com a letra no meio num canvas,
-// pra usar como textura do logo (sem precisar de PNG externo)
-function makeLogoTexture(letter, letterColor) {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size / 2 - 6, 0, Math.PI * 2);
-  ctx.fill();
-
-  const hex = `#${letterColor.toString(16).padStart(6, '0')}`;
-  ctx.fillStyle = hex;
-  ctx.font = `bold ${Math.floor(size * 0.72)}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(letter, size / 2, size / 2 + size * 0.04);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
+import { KART_PRESETS } from './kartPresets.js';
+import { makeEmblemTexture } from './kartEmblems.js';
+import { addDecorations } from './kartDecorations.js';
+import { texLataria, texBanco, texPneuBanda, texPneuLateral } from './kartTextures.js';
 
 export class Kart extends THREE.Group {
   constructor(preset = 'mario') {
     super();
 
     this.name   = `Kart_${preset}`;
-    this.config = PRESETS[preset] ?? PRESETS.mario;
+    this.config = KART_PRESETS[preset] ?? KART_PRESETS.mario;
+
+    // a origem fica no chão, então a escala não tira as rodas do asfalto
+    this.scale.setScalar(this.config.scale ?? 1);
 
     this.speed = 0;
     // giro em ponto morto: as rodas giram sem o kart sair do lugar,
@@ -69,7 +27,7 @@ export class Kart extends THREE.Group {
     this.wheelRadius = 0.32;
     this.wheelWidth  = 0.28;
 
-    // capô: guardado pra reusar no posicionamento do logo
+    // capô: guardado para reutilizar no posicionamento do logo
     this.hoodTilt   = -0.60;
     this.hoodCenter = new THREE.Vector3(0, this.wheelRadius + 0.42, 0.68);
     this.hoodDepth  = 0.14;
@@ -88,15 +46,18 @@ export class Kart extends THREE.Group {
     this._buildFrontHood();
     this._buildLogoBadge();
     this._buildSeat();
+    this._buildCockpit();
     this._buildSteering();
     this._buildExhausts();
     this._buildWheels();
+    addDecorations(this, this.config.decorations);
   }
 
   // cria a carroceria inferior, que cobre o chassi e as suspensões
   _buildLowerHull() {
     const mat = new THREE.MeshStandardMaterial({
       color: this.config.lowerColor,
+      map: texLataria,
       roughness: 0.55,
       metalness: 0.05,
     });
@@ -153,6 +114,7 @@ export class Kart extends THREE.Group {
   _buildMainBody() {
     const mat = new THREE.MeshStandardMaterial({
       color: this.config.bodyColor,
+      map: texLataria,
       roughness: 0.4,
       metalness: 0.05,
     });
@@ -176,10 +138,11 @@ export class Kart extends THREE.Group {
     this.add(back);
   }
 
-  // rampa inclinada na frente, topo cai pra trás
+  // rampa inclinada na frente, com o topo voltado para trás
   _buildFrontHood() {
     const mat = new THREE.MeshStandardMaterial({
       color: this.config.bodyColor,
+      map: texLataria,
       roughness: 0.4,
       metalness: 0.05,
     });
@@ -194,7 +157,7 @@ export class Kart extends THREE.Group {
 
   // disco com a letra, grudado na face inclinada do capô
   _buildLogoBadge() {
-    const tex = makeLogoTexture(this.config.logoLetter, this.config.logoBgColor);
+    const tex = makeEmblemTexture(this.config.emblem);
     const mat = new THREE.MeshStandardMaterial({
       map: tex,
       roughness: 0.5,
@@ -217,7 +180,8 @@ export class Kart extends THREE.Group {
 
   _buildSeat() {
     const mat = new THREE.MeshStandardMaterial({
-      color: this.config.seatColor,
+      color: 0xffffff, // branco: o couro aparece com a cor da própria imagem
+      map: texBanco,
       roughness: 0.75,
       metalness: 0.0,
     });
@@ -228,14 +192,47 @@ export class Kart extends THREE.Group {
     seat.castShadow = true;
     this.add(seat);
 
-    const backGeo = new THREE.BoxGeometry(0.55, 0.58, 0.10);
-    const back = new THREE.Mesh(backGeo, mat);
-    back.position.set(0, this.wheelRadius + 0.56, -0.42);
-    back.castShadow = true;
-    this.add(back);
+    // seatBackHeight = 0 remove o encosto (no Bowser, o casco faz esse papel)
+    const backHeight = this.config.seatBackHeight ?? 0.58;
+    if (backHeight > 0) {
+      const backGeo = new THREE.BoxGeometry(0.55, backHeight, 0.10);
+      const back = new THREE.Mesh(backGeo, mat);
+      back.position.set(0, this.wheelRadius + 0.27 + backHeight / 2, -0.42);
+      back.castShadow = true;
+      this.add(back);
+    }
 
-    // ponto em cima do assento, pro Racer saber onde colocar o personagem
+    // ponto sobre o assento, usado pelo Racer para posicionar o personagem
     this.seatAnchor.set(0, this.wheelRadius + 0.32, -0.15);
+  }
+
+  // Fecha o cockpit, como num kart de corrida: paredes laterais entre os
+  // flancos e o capô, e o capô estendido para trás até a frente do piloto.
+  // Essa parte do capô cobre as pernas (que foram cortadas pelo clipping plane).
+  _buildCockpit() {
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: this.config.bodyColor, map: texLataria,
+      roughness: 0.4, metalness: 0.05,
+    });
+
+    // paredes laterais, continuando os flancos até o capô
+    const wallGeo = new THREE.BoxGeometry(0.14, 0.38, 0.45);
+    for (const side of [-1, 1]) {
+      const wall = new THREE.Mesh(wallGeo, bodyMat);
+      wall.position.set(side * 0.5, this.wheelRadius + 0.33, 0.39);
+      wall.castShadow = true;
+      this.add(wall);
+    }
+
+    // capô sobre as pernas: da frente do banco até o capô inclinado
+    const back = 0.0;
+    const front = 0.62;
+    const legCoverGeo = new THREE.BoxGeometry(0.86, 0.04, front - back);
+    const legCover = new THREE.Mesh(legCoverGeo, bodyMat);
+    legCover.position.set(0, this.wheelRadius + 0.44, (back + front) / 2);
+    legCover.castShadow = true;
+    legCover.receiveShadow = true;
+    this.add(legCover);
   }
 
   _buildSteering() {
@@ -248,10 +245,12 @@ export class Kart extends THREE.Group {
 
     const group = new THREE.Group();
     group.name = 'steering';
+    // steeringOffsetZ aproxima o volante do piloto (negativo = para trás)
+    group.position.z = this.config.steeringOffsetZ ?? 0;
 
     const tilt = -0.5;
 
-    // coluna e aro puxados pra trás, mais perto do banco, pra o volante cair
+    // coluna e aro recuados, mais perto do banco, para que o volante fique
     // na frente do piloto e não dentro da carroceria dianteira
     const colGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.45, 12);
     const col = new THREE.Mesh(colGeo, columnMat);
@@ -275,11 +274,11 @@ export class Kart extends THREE.Group {
     this.add(group);
   }
 
-  // canos a 45° pra cima
-  // mario: 3 cilindros. luigi: 2 cônicos com ponta amarela.
+  // canos inclinados a 45°
+  // 'triple': 3 cilindros. 'twinCone': 2 canos cônicos.
   _buildExhausts() {
     const pipeMat = new THREE.MeshStandardMaterial({
-      color: 0x9a9a9a, roughness: 0.25, metalness: 0.9,
+      color: this.config.exhaustPipeColor, roughness: 0.25, metalness: 0.9,
     });
     const tipMat = new THREE.MeshStandardMaterial({
       color: this.config.exhaustTipColor, roughness: 0.35, metalness: 0.6,
@@ -352,7 +351,7 @@ export class Kart extends THREE.Group {
     this.add(group);
   }
 
-  // cada roda num Group pra ter pivô próprio
+  // cada roda em um Group, para ter pivô próprio
   _buildWheels() {
     const positions = [
       { name: 'FL', x: -0.60, z:  0.60 },
@@ -373,43 +372,24 @@ export class Kart extends THREE.Group {
   _makeWheel() {
     const group = new THREE.Group();
 
-    const tireMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1a1a, roughness: 0.9, metalness: 0.0,
+    // A CylinderGeometry tem 3 grupos de faces: lateral, tampa de cima e
+    // tampa de baixo. Com um array de materiais, cada grupo usa o seu:
+    // a banda de rodagem na lateral e o desenho da roda nas tampas.
+    const treadMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, map: texPneuBanda, roughness: 0.9,
+    });
+    // a cor multiplica a textura: o pneu preto continua preto e o aro
+    // prateado fica com a cor do preset (amarelo na Peach e no Bowser)
+    const sideMat = new THREE.MeshStandardMaterial({
+      color: this.config.rimColor, map: texPneuLateral, roughness: 0.6,
     });
     const tireGeo = new THREE.CylinderGeometry(
       this.wheelRadius, this.wheelRadius, this.wheelWidth, 28
     );
-    const tire = new THREE.Mesh(tireGeo, tireMat);
+    const tire = new THREE.Mesh(tireGeo, [treadMat, sideMat, sideMat]);
     tire.rotation.z = Math.PI / 2;
     tire.castShadow = true;
     group.add(tire);
-
-    const rimMat = new THREE.MeshStandardMaterial({
-      color: 0xf0e2a0, roughness: 0.4, metalness: 0.35,
-    });
-    const rimGeo = new THREE.CylinderGeometry(
-      this.wheelRadius * 0.55, this.wheelRadius * 0.55,
-      this.wheelWidth * 1.02, 20
-    );
-    const rim = new THREE.Mesh(rimGeo, rimMat);
-    rim.rotation.z = Math.PI / 2;
-    group.add(rim);
-
-    const hubMat = new THREE.MeshStandardMaterial({
-      color: 0x303030, roughness: 0.5, metalness: 0.4,
-    });
-    const hubGeo = new THREE.CylinderGeometry(
-      this.wheelRadius * 0.14, this.wheelRadius * 0.14,
-      this.wheelWidth * 1.05, 16
-    );
-    const hub = new THREE.Mesh(hubGeo, hubMat);
-    hub.rotation.z = Math.PI / 2;
-    group.add(hub);
-
-    // marca radial pra dar pra ver o giro
-    const markGeo = new THREE.BoxGeometry(this.wheelWidth * 1.06, 0.015, this.wheelRadius * 0.95);
-    const mark = new THREE.Mesh(markGeo, hubMat);
-    group.add(mark);
 
     return group;
   }
@@ -418,7 +398,8 @@ export class Kart extends THREE.Group {
   // com o kart parado usa idleWheelSpeed, senão as rodas ficariam travadas
   update(delta) {
     const v = this.speed !== 0 ? this.speed : this.idleWheelSpeed;
-    const omega = v / this.wheelRadius;
+    // raio efetivo, considerando a escala do kart
+    const omega = v / (this.wheelRadius * this.scale.y);
     for (const wheel of this.wheels) {
       wheel.rotation.x += omega * delta;
     }

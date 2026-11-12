@@ -21,7 +21,7 @@ export function createTireStack(count = 3) {
     });
     const tire = new THREE.Mesh(new THREE.TorusGeometry(R, tube, 12, 28), mat);
     tire.rotation.x = Math.PI / 2;
-    tire.rotation.z = i * 0.7;          // gira cada pneu pra não ficarem idênticos
+    tire.rotation.z = i * 0.7;          // gira cada pneu para não ficarem idênticos
     tire.position.y = tube + i * tube * 2;
     tire.castShadow = tire.receiveShadow = true;
     g.add(tire);

@@ -1,0 +1,11 @@
+Model Information:
+* title:	Bowser Animation 3d
+* source:	https://sketchfab.com/3d-models/bowser-animation-3d-a95381c0c9a64a24802cb7ca077c0667
+* author:	Vandacvi (https://sketchfab.com/Vandacvi)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Bowser Animation 3d" (https://sketchfab.com/3d-models/bowser-animation-3d-a95381c0c9a64a24802cb7ca077c0667) by Vandacvi (https://sketchfab.com/Vandacvi) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

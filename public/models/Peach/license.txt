@@ -1,0 +1,11 @@
+Model Information:
+* title:	Peach Dancing from Super Mario
+* source:	https://sketchfab.com/3d-models/peach-dancing-from-super-mario-cf1c656628c64915a87fd9f2ffc723ab
+* author:	3D by Renato (https://sketchfab.com/3dbyrenato)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Peach Dancing from Super Mario" (https://sketchfab.com/3d-models/peach-dancing-from-super-mario-cf1c656628c64915a87fd9f2ffc723ab) by 3D by Renato (https://sketchfab.com/3dbyrenato) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

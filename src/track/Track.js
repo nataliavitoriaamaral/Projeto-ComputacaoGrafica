@@ -3,6 +3,7 @@
 // Asfalto, faixa central, zebras, muros e a largada seguem a mesma curva.
 
 import * as THREE from 'three';
+import { disposeObject } from '../utils/dispose.js';
 
 export class Track extends THREE.Group {
   constructor(config) {
@@ -40,7 +41,7 @@ export class Track extends THREE.Group {
 
     const ground = new THREE.Mesh(geo, mat);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.05; // um pouco abaixo da pista pra não dar z-fighting
+    ground.position.y = -0.05; // um pouco abaixo da pista para evitar z-fighting
     ground.receiveShadow = true;
     this.add(ground);
   }
@@ -193,15 +194,21 @@ export class Track extends THREE.Group {
       side: THREE.DoubleSide,
     });
 
-    const startLine = new THREE.Mesh(new THREE.PlaneGeometry(this.trackWidth, 3), mat);
+    // deita o plano direto na geometria (XY -> XZ). Assim a malha só precisa
+    // girar em Y, igual ao pórtico e aos karts.
+    // Antes era rotation.x + rotation.z na malha, mas o Three.js aplica o Z
+    // antes do X (ordem 'XYZ'), e a faixa ficava torta quando a pista
+    // não começava alinhada com um eixo.
+    const geo = new THREE.PlaneGeometry(this.trackWidth, 3);
+    geo.rotateX(-Math.PI / 2);
+
+    const startLine = new THREE.Mesh(geo, mat);
     const startPt = this.path.getPointAt(0);
     const tangent = this.path.getTangentAt(0).normalize();
 
     startLine.position.copy(startPt);
     startLine.position.y = 0.02;
-    startLine.rotation.x = -Math.PI / 2;
-    // gira no plano do chão pra ficar atravessada na pista
-    startLine.rotation.z = -Math.atan2(tangent.x, tangent.z);
+    startLine.rotation.y = Math.atan2(tangent.x, tangent.z);
 
     this.add(startLine);
   }
@@ -276,17 +283,9 @@ export class Track extends THREE.Group {
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }
-  // Método para liberar a memória da GPU ao remover a pista da cena
+
+  // libera a memória da GPU ao remover a pista da cena
   dispose() {
-    this.traverse((child) => {
-      if (child.isMesh) {
-        child.geometry.dispose();
-        if (Array.isArray(child.material)) {
-          child.material.forEach((mat) => mat.dispose());
-        } else {
-          child.material.dispose();
-        }
-      }
-    });
-  }  
+    disposeObject(this);
+  }
 }

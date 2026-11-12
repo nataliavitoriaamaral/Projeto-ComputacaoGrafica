@@ -11,6 +11,8 @@ export const TRACK_CONFIGS = [
     kerbRed: 0xc8102e,
     kerbWhite: 0xffffff,
     wallColor: 0x888888,
+    skyColor: 0x87ceeb,     // céu azul
+    scenery: 'campo',       // tema da paisagem (src/scenery/Scenery.js)
     controlPoints: [
       new THREE.Vector3(  0, 0,   0),
       new THREE.Vector3( 50, 0,  20),
@@ -30,6 +32,8 @@ export const TRACK_CONFIGS = [
     kerbRed: 0xd97706,     // Zebra Laranja
     kerbWhite: 0xfef3c7,   // Zebra Bege
     wallColor: 0x9a3412,   // Muros tom terracota
+    skyColor: 0xf3c98b,    // céu alaranjado, fim de tarde
+    scenery: 'deserto',
     controlPoints: [
       new THREE.Vector3(  0, 0,   0),
       new THREE.Vector3( 80, 0,   0),
@@ -48,6 +52,8 @@ export const TRACK_CONFIGS = [
     kerbRed: 0xff007f,     // Neon Rosa
     kerbWhite: 0x00f0ff,   // Neon Cyan
     wallColor: 0x4c1d95,   // Muro Roxo
+    skyColor: 0x0b0b1e,    // noite
+    scenery: 'cidade',
     controlPoints: [
       new THREE.Vector3(  0, 0,   0),
       new THREE.Vector3( 60, 0,  40),

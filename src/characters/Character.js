@@ -1,5 +1,5 @@
 // Character.js
-// Carrega personagem de .gltf, redimensiona pra uma altura alvo,
+// Carrega personagem de .gltf, redimensiona para uma altura alvo,
 // encosta no chão e tenta consertar texturas e meshes espelhadas
 // que o loader não trata direito nos modelos do Sketchfab.
 
@@ -14,12 +14,18 @@ export class Character extends THREE.Group {
     name = 'Character',
     materialMapMirrors = [],
     arms = [],
+    hipFraction,
+    posture = [],
   }) {
     super();
     this.name = name;
     this.targetHeight = targetHeight;
     // nomes dos ossos de cada braço: [ombro, cotovelo, pulso]
     this.arms = arms;
+    // altura do quadril em relação à altura total (padrão no Racer: 0.45)
+    this.hipFraction = hipFraction;
+    // correções de pose: [{ bone, pitch }], pitch em graus no eixo X
+    this._posture = posture;
     this._materialMapMirrors = materialMapMirrors;
 
     this._url = url;
@@ -60,9 +66,35 @@ export class Character extends THREE.Group {
     }
     this._fixMaterialVisibility();
     this._fixMirroredMeshes();
+    this._applyPosture();
 
     this.add(this.model);
     return this;
+  }
+
+  // Gira cada osso da lista em torno do eixo X do personagem. Pitch negativo
+  // inclina para trás. Os ossos filhos acompanham a rotação.
+  // Usado no Bowser, cujo modelo vem curvado para frente.
+  _applyPosture() {
+    if (!this._posture.length) return;
+    const xAxis = new THREE.Vector3(1, 0, 0);
+
+    for (const { bone: name, pitch } of this._posture) {
+      const bone = this.model.getObjectByName(name);
+      if (!bone) {
+        console.warn(`${this.name}: osso ${name} não encontrado`);
+        continue;
+      }
+      this.model.updateMatrixWorld(true);
+
+      // aplica o giro no espaço do mundo e converte para o espaço do pai
+      const turn = new THREE.Quaternion()
+        .setFromAxisAngle(xAxis, THREE.MathUtils.degToRad(pitch));
+      const world = turn.multiply(bone.getWorldQuaternion(new THREE.Quaternion()));
+      const parentInv = bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+      bone.quaternion.copy(parentInv.multiply(world));
+    }
+    this.model.updateMatrixWorld(true);
   }
 
   _fitToHeight(targetHeight) {
@@ -80,7 +112,7 @@ export class Character extends THREE.Group {
   }
 
   // tenta carregar <nome>_diffuse.png, _normal.png e _specularGlossiness.png
-  // da pasta de texturas pros materiais que vieram sem map.
+  // da pasta de texturas para os materiais que vieram sem map.
   async _patchMissingMaps() {
     const texLoader = new THREE.TextureLoader();
     const cache = new Map();
@@ -159,7 +191,7 @@ export class Character extends THREE.Group {
   }
 
   // o Luigi veio sem o PNG de alguns materiais do lado direito. o lado direito
-  // é o espelho do esquerdo, então dá pra reaproveitar a textura do par que
+  // é o espelho do esquerdo, então é possível reaproveitar a textura do par que
   // existe invertendo o eixo U: repeat.x = -1 e offset.x = 1 fazem u virar 1-u.
   _mirrorMaterialMap(pairs) {
     const materials = new Map();
@@ -214,7 +246,7 @@ export class Character extends THREE.Group {
   }
 
   // meshes com escala negativa (determinante < 0) ficam com os triângulos
-  // virados pro lado errado; troca a ordem dos vértices pra corrigir
+  // virados para o lado errado; a ordem dos vértices é invertida para corrigir
   _fixMirroredMeshes() {
     this.model.updateMatrixWorld(true);
 
@@ -275,6 +307,41 @@ export function createLuigi(overrides = {}) {
     arms: [
       ['L_upperarm_024', 'L_forearm_025', 'L_hand_026'],
       ['R_upperarm_041', 'R_forearm_042', 'R_hand_043'],
+    ],
+    ...overrides,
+  }).ready;
+}
+
+// Os arquivos da Peach e do Bowser incluem animação, que não é utilizada.
+
+export function createPeach(overrides = {}) {
+  return new Character({
+    name: 'Peach',
+    url: '/models/Peach/scene.gltf',
+    targetHeight: 1.6,
+    // esqueleto do Mixamo, com nomes no mesmo padrão do Mario
+    arms: [
+      ['mixamorigLeftArm_08', 'mixamorigLeftForeArm_09', 'mixamorigLeftHand_010'],
+      ['mixamorigRightArm_028', 'mixamorigRightForeArm_029', 'mixamorigRightHand_030'],
+    ],
+    ...overrides,
+  }).ready;
+}
+
+export function createBowser(overrides = {}) {
+  return new Character({
+    name: 'Bowser',
+    url: '/models/Bowser/scene.gltf',
+    targetHeight: 1.7,
+    // endireita a coluna, que vem curvada para frente
+    posture: [
+      { bone: 'Spine_016', pitch: -40 },
+    ],
+    // quadril mais baixo que o padrão, para o tronco ficar acima das laterais
+    hipFraction: 0.4,
+    arms: [
+      ['LeftArm_020', 'LeftForeArm_021', 'LeftHandRoll_022'],
+      ['RightArm_037', 'RightForeArm_038', 'RightHandRoll_039'],
     ],
     ...overrides,
   }).ready;

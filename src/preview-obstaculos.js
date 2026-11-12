@@ -25,7 +25,7 @@ dir.shadow.camera.top = 8;
 dir.shadow.camera.bottom = -8;
 scene.add(dir);
 
-// chao neutro so pra receber sombra + grade de referencia
+// chão neutro para receber sombra, com grade de referência
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(20, 10),
   new THREE.MeshStandardMaterial({ color: 0x3a3f47, roughness: 1 })

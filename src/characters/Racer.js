@@ -1,26 +1,26 @@
 // Racer.js
 // Junta kart + personagem. Como o personagem está em T-pose (pernas retas,
-// não dá pra dobrar o joelho), afundei o quadril até o assento e usei um
-// clipping plane horizontal pra esconder tudo que fica abaixo do banco.
+// sem como dobrar o joelho), o quadril é afundado até o assento e um
+// clipping plane horizontal esconde tudo que fica abaixo do banco.
 // Os braços são dobrados girando os ossos até as mãos chegarem no volante.
 
 import * as THREE from 'three';
 import { Kart } from './Kart.js';
 
-// altura do quadril como fração da altura total
+// altura do quadril em relação à altura total, quando o personagem não define
 const HIP_FRACTION = 0.45;
 
 // distância do centro do volante até onde cada pulso fica (o aro tem raio 0.13)
 const GRIP_X = 0.12;
 
-// gira o osso pra que o filho (próxima junta) aponte pro ponto, em coordenadas de mundo
+// gira o osso para que o filho (próxima junta) aponte para o ponto, em coordenadas de mundo
 function aimBone(bone, child, point) {
   const origin = bone.getWorldPosition(new THREE.Vector3());
   const from = child.getWorldPosition(new THREE.Vector3()).sub(origin).normalize();
   const to = point.clone().sub(origin).normalize();
   const turn = new THREE.Quaternion().setFromUnitVectors(from, to);
 
-  // rotação nova no mundo = turn * rotação atual; volta pro espaço do pai
+  // rotação nova no mundo = turn * rotação atual; depois volta para o espaço do pai
   const world = turn.multiply(bone.getWorldQuaternion(new THREE.Quaternion()));
   const parentInv = bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
   bone.quaternion.copy(parentInv.multiply(world));
@@ -39,7 +39,7 @@ export class Racer extends THREE.Group {
     this.add(this.kart);
     this.add(this.character);
 
-    // começa em y=0; _updateClipPlane() ajusta pra altura do assento
+    // começa em y=0; _updateClipPlane() ajusta para a altura do assento
     this._clipPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this._applyClippingToCharacter();
 
@@ -49,20 +49,25 @@ export class Racer extends THREE.Group {
   }
 
   _placeCharacterOnSeat() {
-    const hipHeight = this.character.targetHeight * HIP_FRACTION;
+    const hipFraction = this.character.hipFraction ?? HIP_FRACTION;
+    const hipHeight = this.character.targetHeight * hipFraction;
 
-    this.character.position.copy(this.kart.seatAnchor);
+    // seatAnchor está no espaço do kart; a matriz do kart inclui a escala
+    this.kart.updateMatrix();
+    const seat = this.kart.seatAnchor.clone().applyMatrix4(this.kart.matrix);
+
+    this.character.position.copy(seat);
     this.character.position.y -= hipHeight;
     this.character.position.y -= this.seatOffset;
 
-    // kart e character ambos olham pra +Z, então não precisa rotacionar.
+    // kart e personagem olham para +Z, então não é preciso rotacionar.
     // se algum gltf futuro vier virado:
     //   this.character.rotation.y = Math.PI;
   }
 
   // IK de dois ossos: dado o ombro e o ponto do volante, a lei dos cossenos
-  // dá onde o cotovelo tem que ficar. Depois cada osso é girado pra apontar
-  // pro ponto seguinte (braço -> cotovelo, antebraço -> pulso).
+  // dá onde o cotovelo deve ficar. Depois cada osso é girado para apontar
+  // para o ponto seguinte (braço -> cotovelo, antebraço -> pulso).
   // Roda uma vez só, com o Racer ainda na origem (mundo = local do Racer).
   _holdSteeringWheel() {
     this.updateMatrixWorld(true);
@@ -85,11 +90,11 @@ export class Racer extends THREE.Group {
       const target = ring.localToWorld(new THREE.Vector3(side * GRIP_X, 0, 0));
 
       const toTarget = target.clone().sub(shoulder);
-      // se o volante estiver longe demais o braço fica esticado apontando pra ele
+      // se o volante estiver longe demais, o braço fica esticado apontando para ele
       const d = THREE.MathUtils.clamp(toTarget.length(), Math.abs(a - b) + 1e-4, a + b - 1e-4);
       const dir = toTarget.normalize();
 
-      // o cotovelo dobra pra baixo e um pouco pra fora
+      // o cotovelo dobra para baixo e um pouco para fora
       const bend = new THREE.Vector3(side * 0.5, -1, 0);
       bend.addScaledVector(dir, -bend.dot(dir)).normalize();
 
@@ -105,7 +110,7 @@ export class Racer extends THREE.Group {
     }
   }
 
-  // mesmo plano em todos os materiais. clipShadows pra sombra sumir junto.
+  // mesmo plano em todos os materiais; clipShadows corta a sombra também.
   _applyClippingToCharacter() {
     this.character.traverse((obj) => {
       if (!obj.isMesh || !obj.material) return;
@@ -119,7 +124,7 @@ export class Racer extends THREE.Group {
     });
   }
 
-  // precisa rodar depois que a world matrix do Racer tá atualizada
+  // deve rodar depois que a world matrix do Racer estiver atualizada
   _updateClipPlane() {
     this.updateMatrixWorld(true);
     const seatWorld = this.kart.localToWorld(this.kart.seatAnchor.clone());

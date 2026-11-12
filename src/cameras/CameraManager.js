@@ -7,7 +7,7 @@
 //   updateProjectionMatrix(), que monta camera.projectionMatrix a partir de
 //   fov, aspect, near e far. Ela é recalculada em resize() e changeFov().
 // - aplicada no renderer.render(scene, camera) do main.js: o Three.js manda a
-//   projectionMatrix pro vertex shader, que faz
+//   projectionMatrix para o vertex shader, que faz
 //   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 //   e a divisão por w depois disso é o que deixa o que está longe menor.
 
@@ -185,7 +185,7 @@ export class CameraManager {
       : (this.followTarget ? this.followTarget.position : this.grid.point);
 
     // usa a mesma altura que a perspectiva enxerga na distância do ponto de
-    // referência, pra que ele apareça do mesmo tamanho nas duas projeções
+    // referência, para que ele apareça do mesmo tamanho nas duas projeções
     const d = src.position.distanceTo(ref);
     const h = d * Math.tan(THREE.MathUtils.degToRad(src.fov / 2));
     const w = h * this.aspect;
