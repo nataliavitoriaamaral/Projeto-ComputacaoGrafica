@@ -70,11 +70,12 @@ Alguns ajustes são específicos de cada personagem. Os braços da Peach são cu
 
 ### Texturas
 
-As imagens ficam em "public/textures/kart/" e são carregadas em "kartTextures.js" com "TextureLoader". 
+As imagens ficam em "public/textures/kart/" e são carregadas com "TextureLoader" pela função "loadTexture" ("src/utils/loadTexture.js"), usada tanto pelos karts ("kartTextures.js") quanto pelo asfalto ("Track.js").
 
 - Lataria ("TexturaLatariaCarroSuave.jpg"): carroceria e capô. A textura é multiplicada pela cor do material, então a mesma imagem clara serve para todos os karts. Essa é uma cópia clareada de "TexturaLatariaCarro.avif" (misturada 50% com branco), para o efeito ficar mais leve.
 - Banco ("BancoCarro.webp"): assento e encosto.
 - Pneu: o cilindro tem três grupos de faces e recebe um array de materiais. A lateral usa "PneuLateral.jpg", girada 90° e repetida 3 vezes; as tampas usam a roda da imagem "RodaCarro.jpg", recortada com "offset" e "repeat".
+- Asfalto ("texturaAsfalto.avif"): a malha da pista é montada à mão, então as coordenadas UV são calculadas em "_buildAsphalt()". Elas contam quantas cópias da foto cabem na pista (uma a cada 4 unidades), para o grão ter o mesmo tamanho nas três pistas. A foto repete espelhada ("MirroredRepeatWrapping"), para não aparecerem emendas, e usa filtragem anisotrópica, para não virar um borrão quando vista de longe. Como o shader multiplica cor × textura, o "asphaltColor" de cada pista funciona como um filtro sobre a foto: branco no Circuito Tradicional, bege no Deserto e azul no Neon.
 
 ### Câmeras
 
@@ -133,6 +134,7 @@ src/
     Scenery.js              # escolhe as peças de cada tema e espalha em volta da pista
   utils/
     dispose.js              # libera geometrias e materiais da GPU ao trocar de pista
+    loadTexture.js          # carrega imagens de public/textures/ (karts e asfalto)
 public/
   textures/                 # texturas SVG dos obstáculos (cone, barril, pneu, óleo)
   textures/kart/            # imagens das texturas dos karts

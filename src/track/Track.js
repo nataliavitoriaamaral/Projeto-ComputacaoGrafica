@@ -4,6 +4,19 @@
 
 import * as THREE from 'three';
 import { disposeObject } from '../utils/dispose.js';
+import { loadTexture } from '../utils/loadTexture.js';
+
+// Textura do asfalto, carregada uma vez e usada pelas três pistas.
+// MirroredRepeat repete a foto espelhando a cada cópia, então as bordas
+// sempre se encontram e não aparece a "grade" das emendas.
+const asphaltTexture = loadTexture('kart/texturaAsfalto.avif');
+asphaltTexture.wrapS = THREE.MirroredRepeatWrapping;
+asphaltTexture.wrapT = THREE.MirroredRepeatWrapping;
+// filtragem anisotrópica: sem ela o asfalto vira um borrão ou fica
+// "chiando" quando visto de longe e de lado (o Three.js limita ao máximo da placa)
+asphaltTexture.anisotropy = 8;
+
+const ASPHALT_TILE = 4; // tamanho (em unidades) que uma cópia da foto cobre
 
 export class Track extends THREE.Group {
   constructor(config) {
@@ -53,7 +66,9 @@ export class Track extends THREE.Group {
     const halfW = this.trackWidth / 2;
 
     const vertices = [];
+    const uvs = [];
     const indices = [];
+    const length = this.path.getLength();
 
     points.forEach((pt, i) => {
       const u = i / steps;
@@ -67,6 +82,13 @@ export class Track extends THREE.Group {
 
       vertices.push(leftPt.x, leftPt.y, leftPt.z);
       vertices.push(rightPt.x, rightPt.y, rightPt.z);
+
+      // UV em "número de cópias da foto": no sentido da largura vai de 0 até
+      // largura / ASPHALT_TILE, e no comprimento conta quantas cópias já
+      // couberam até aqui. Valores acima de 1 fazem a textura repetir.
+      const v = (u * length) / ASPHALT_TILE;
+      uvs.push(0, v);
+      uvs.push(this.trackWidth / ASPHALT_TILE, v);
     });
 
     // dois triângulos entre cada par de amostras
@@ -82,10 +104,14 @@ export class Track extends THREE.Group {
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geo.setIndex(indices);
     geo.computeVertexNormals();
 
+    // o shader multiplica cor x textura, então a cor funciona como um
+    // filtro sobre a foto (branco deixa a foto como ela é)
     const mat = new THREE.MeshStandardMaterial({
+      map: asphaltTexture,
       color: this.config.asphaltColor,
       roughness: 0.8,
       metalness: 0.1,

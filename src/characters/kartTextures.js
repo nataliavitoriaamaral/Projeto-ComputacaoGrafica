@@ -8,14 +8,9 @@
 // As coordenadas UV já vêm prontas nas geometrias do Three.js.
 
 import * as THREE from 'three';
+import { loadTexture } from '../utils/loadTexture.js';
 
-const loader = new THREE.TextureLoader();
-
-function carregar(arquivo) {
-  const textura = loader.load(`/textures/kart/${arquivo}`);
-  textura.colorSpace = THREE.SRGBColorSpace;
-  return textura;
-}
+const carregar = (arquivo) => loadTexture(`kart/${arquivo}`);
 
 export const texLataria = carregar('TexturaLatariaCarroSuave.jpg');
 export const texBanco = carregar('BancoCarro.webp');

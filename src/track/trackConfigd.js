@@ -7,7 +7,7 @@ export const TRACK_CONFIGS = [
     name: 'Circuito Tradicional',
     trackWidth: 12,
     groundColor: 0x2e8b57,  // Grama verde
-    asphaltColor: 0x2b2b2b, // Asfalto escuro
+    asphaltColor: 0xffffff, // filtro sobre a foto do asfalto: branco = foto original
     kerbRed: 0xc8102e,
     kerbWhite: 0xffffff,
     wallColor: 0x888888,
@@ -28,7 +28,7 @@ export const TRACK_CONFIGS = [
     name: 'Circuito Deserto',
     trackWidth: 14,
     groundColor: 0xedc9af,  // Areia
-    asphaltColor: 0x3a3532, // Asfalto poeirento
+    asphaltColor: 0xf0d2b4, // filtro bege: asfalto poeirento
     kerbRed: 0xd97706,     // Zebra Laranja
     kerbWhite: 0xfef3c7,   // Zebra Bege
     wallColor: 0x9a3412,   // Muros tom terracota
@@ -48,7 +48,7 @@ export const TRACK_CONFIGS = [
     name: 'Circuito Neon / Noite',
     trackWidth: 12,
     groundColor: 0x050515,  // Chão quase preto
-    asphaltColor: 0x111827, // Asfalto azulado escuro
+    asphaltColor: 0x8a9ad8, // filtro azul: asfalto azulado e mais escuro
     kerbRed: 0xff007f,     // Neon Rosa
     kerbWhite: 0x00f0ff,   // Neon Cyan
     wallColor: 0x4c1d95,   // Muro Roxo
