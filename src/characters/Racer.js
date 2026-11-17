@@ -1,4 +1,3 @@
-// Racer.js
 // Junta kart + personagem. Como o personagem está em T-pose (pernas retas,
 // sem como dobrar o joelho), o quadril é afundado até o assento e um
 // clipping plane horizontal esconde tudo que fica abaixo do banco.
@@ -10,17 +9,25 @@ import { Kart } from './Kart.js';
 // altura do quadril em relação à altura total, quando o personagem não define
 const HIP_FRACTION = 0.45;
 
-// distância do centro do volante até onde cada pulso fica (o aro tem raio 0.13)
+// distância do centro do volante até onde cada pulso fica 
 const GRIP_X = 0.12;
 
-// gira o osso para que o filho (próxima junta) aponte para o ponto, em coordenadas de mundo
+// giro máximo da cabeça para cada lado
+const ANGULO_PESCOCO = THREE.MathUtils.degToRad(45);
+// quanto a cabeça vira para cada radiano por segundo que o kart gira na curva
+const CURVA_PESCOCO = 0.6;
+// adversário mais perto que isso faz o piloto olhar para ele
+const DISTANCIA_ADVERSARIO = 5;
+// quão rápido a cabeça chega no ângulo desejado
+const SUAVIDADE_PESCOCO = 4;
+
+// gira o osso para que a próxima junta aponte para o ponto, em coordenadas de mundo
 function aimBone(bone, child, point) {
   const origin = bone.getWorldPosition(new THREE.Vector3());
   const from = child.getWorldPosition(new THREE.Vector3()).sub(origin).normalize();
   const to = point.clone().sub(origin).normalize();
   const turn = new THREE.Quaternion().setFromUnitVectors(from, to);
 
-  // rotação nova no mundo = turn * rotação atual; depois volta para o espaço do pai
   const world = turn.multiply(bone.getWorldQuaternion(new THREE.Quaternion()));
   const parentInv = bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
   bone.quaternion.copy(parentInv.multiply(world));
@@ -45,30 +52,69 @@ export class Racer extends THREE.Group {
 
     this._placeCharacterOnSeat();
     this._holdSteeringWheel();
+    this._prepararPescoco();
     this._updateClipPlane();
+  }
+
+  // Guarda a rotação inicial do osso do pescoço e o eixo vertical do
+  // personagem. Assim o giro é sempre em
+  // torno do eixo vertical, mesmo com cada esqueleto tendo eixos diferentes
+  _prepararPescoco() {
+    this.ossoPescoco = this.character.pescoco
+      ? this.character.getObjectByName(this.character.pescoco)
+      : null;
+    if (!this.ossoPescoco) return;
+
+    this.updateMatrixWorld(true);
+    this.rotacaoInicialPescoco = this.ossoPescoco.quaternion.clone();
+    const paiInverso = this.ossoPescoco.parent
+      .getWorldQuaternion(new THREE.Quaternion()).invert();
+    this.eixoPescoco = new THREE.Vector3(0, 1, 0).applyQuaternion(paiInverso);
+    this.anguloPescoco = 0;
+    // direção do kart no frame anterior, para medir o quanto ele está virando
+    this.direcaoAnterior = this.rotation.y;
+  }
+
+  // ângulo para saber para onde o personagem deve olhar:para o adversário mais perto ou para dentro da curva
+  _alvoPescoco(delta, adversarios) {
+    let maisPerto = null;
+    let menorDistancia = DISTANCIA_ADVERSARIO;
+    for (const outro of adversarios) {
+      // adversário parado não funciona essa lógica
+      if (outro === this || outro.speed === 0) continue;
+      const distancia = outro.position.distanceTo(this.position);
+      if (distancia < menorDistancia) {
+        menorDistancia = distancia;
+        maisPerto = outro;
+      }
+    }
+    if (maisPerto) {
+      // posição do adversário no espaço do Racer
+      const local = this.worldToLocal(maisPerto.position.clone());
+      return Math.atan2(local.x, local.z);
+    }
+
+    // quanto o kart girou desde o frame anterior 
+    let giro = this.rotation.y - this.direcaoAnterior;
+    giro = Math.atan2(Math.sin(giro), Math.cos(giro));
+    return delta > 0 ? (giro / delta) * CURVA_PESCOCO : 0;
   }
 
   _placeCharacterOnSeat() {
     const hipFraction = this.character.hipFraction ?? HIP_FRACTION;
     const hipHeight = this.character.targetHeight * hipFraction;
 
-    // seatAnchor está no espaço do kart; a matriz do kart inclui a escala
+
     this.kart.updateMatrix();
     const seat = this.kart.seatAnchor.clone().applyMatrix4(this.kart.matrix);
 
     this.character.position.copy(seat);
     this.character.position.y -= hipHeight;
     this.character.position.y -= this.seatOffset;
-
-    // kart e personagem olham para +Z, então não é preciso rotacionar.
-    // se algum gltf futuro vier virado:
-    //   this.character.rotation.y = Math.PI;
   }
 
-  // IK de dois ossos: dado o ombro e o ponto do volante, a lei dos cossenos
-  // dá onde o cotovelo deve ficar. Depois cada osso é girado para apontar
-  // para o ponto seguinte (braço -> cotovelo, antebraço -> pulso).
-  // Roda uma vez só, com o Racer ainda na origem (mundo = local do Racer).
+  // Dado o ombro e o ponto do volante, a lei dos cossenos
+  // dá onde o cotovelo deve ficar
   _holdSteeringWheel() {
     this.updateMatrixWorld(true);
     const ring = this.kart.steeringWheel;
@@ -110,7 +156,6 @@ export class Racer extends THREE.Group {
     }
   }
 
-  // mesmo plano em todos os materiais; clipShadows corta a sombra também.
   _applyClippingToCharacter() {
     this.character.traverse((obj) => {
       if (!obj.isMesh || !obj.material) return;
@@ -129,13 +174,25 @@ export class Racer extends THREE.Group {
     this.updateMatrixWorld(true);
     const seatWorld = this.kart.localToWorld(this.kart.seatAnchor.clone());
 
-    // plano horizontal em y = seatWorld.y; constante = -y (ny*y + d = 0)
     this._clipPlane.normal.set(0, 1, 0);
     this._clipPlane.constant = -seatWorld.y;
   }
 
-  update(delta) {
+  // lista de todos os Racers para o piloto olhar quem passar perto
+  update(delta, adversarios = []) {
     this.kart.update(delta);
+
+    // a cabeça vai aos poucos até o alvo, sem passar do giro máximo
+    if (this.ossoPescoco) {
+      const alvo = THREE.MathUtils.clamp(
+        this._alvoPescoco(delta, adversarios), -ANGULO_PESCOCO, ANGULO_PESCOCO);
+      this.anguloPescoco += (alvo - this.anguloPescoco) * Math.min(1, delta * SUAVIDADE_PESCOCO);
+      this.direcaoAnterior = this.rotation.y;
+      this.ossoPescoco.quaternion
+        .setFromAxisAngle(this.eixoPescoco, this.anguloPescoco)
+        .multiply(this.rotacaoInicialPescoco);
+    }
+
     // se o racer subir/descer o plano em world tem que acompanhar
     this._updateClipPlane();
   }

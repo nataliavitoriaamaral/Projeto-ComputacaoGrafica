@@ -23,6 +23,8 @@ import { LightController } from './lighting/LightController.js';
 // teclado e controle do kart do jogador
 import { Input } from './gameplay/Input.js';
 import { PlayerController } from './gameplay/PlayerController.js';
+// adversários com IA
+import { AIController, DIFFICULTIES } from './gameplay/AIController.js';
 
 // caixa de erro visível na tela, para quando o console estiver fechado
 const errBox = document.createElement('div');
@@ -56,7 +58,7 @@ let scenery = null; // paisagem da pista atual (src/scenery/Scenery.js)
 let trackLength = 0;
 
 // Vetores do grid, compartilhados com o CameraManager. São atualizados com
-// copy() a cada troca de pista, para a câmera continuar com as mesmas referências.
+// copy() a cada troca de pista para a câmera continuar com as mesmas referências
 const gridPoint = new THREE.Vector3();
 const gridTangent = new THREE.Vector3();
 const gridNormal = new THREE.Vector3();
@@ -65,6 +67,8 @@ const gridNormal = new THREE.Vector3();
 const trackObjects = [];
 const itemBoxes = [];
 const racers = [];
+// obstáculos que a IA desvia 
+const obstacles = [];
 
 // posiciona os objetos pela curva, com deslocamento lateral e altura
 function placeObject(object, u, sideOffset, height = 0.01) {
@@ -75,6 +79,9 @@ function placeObject(object, u, sideOffset, height = 0.01) {
   object.position.copy(point).addScaledVector(normal, sideOffset);
   object.position.y += height;
   object.rotation.y = Math.atan2(tangent.x, tangent.z);
+  // posição na pista lida pela IA para desviar
+  object.userData.u = u;
+  object.userData.side = sideOffset;
   scene.add(object);
 
   //salva o objeto para removar após trocar de pista, senão ele fica flutuando no ar
@@ -104,6 +111,10 @@ function populateTrackObjects() {
       itemBoxes.push(itemBox);
     });
   });
+
+  trackObjects.forEach((obj) => {
+    if (!itemBoxes.includes(obj)) obstacles.push(obj);
+  });
 }
 
 // remove os objetos da pista anterior e libera a memória deles
@@ -114,6 +125,7 @@ function clearTrackObjects() {
   });
   trackObjects.length = 0;
   itemBoxes.length = 0;
+  obstacles.length = 0;
 }
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -134,7 +146,7 @@ document.body.appendChild(renderer.domElement);
 // env map para iluminar áreas sem luz direta (sem ele o Luigi ficava muito escuro)
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-// intensidade menor que a padrão; caso contrário ele ilumina quase tudo e não é possível
+// intensidade menor que a padrão para
 // perceber a diferença ao desligar as luzes ([L] e [K])
 scene.environmentIntensity = 0.3;
 
@@ -153,6 +165,11 @@ let cameraManager = null;
 // criado quando o modelo dele termina de carregar 
 const teclado = new Input();
 let controleJogador = null;
+
+// um AIController para cada rival (Luigi, Peach e Bowser)
+const aiControllers = [];
+const DIFFICULTY_ORDER = ['easy', 'normal', 'hard'];
+let difficulty = 'normal';
 
 function loadTrack(index) {
   // Limpa a pista, o grid e a paisagem antigos
@@ -197,6 +214,8 @@ function loadTrack(index) {
   racers.forEach((racer) => grid.placeRacer(racer, racer.userData.slot));
   // o jogador volta a ficar parado na vaga dele
   if (controleJogador) controleJogador.trocarPista(track);
+  // os rivais também voltam para a vaga, parados
+  aiControllers.forEach((ai) => ai.setTrack(track));
 
   // Atualiza a curva usada pelo CameraManager 
   if (cameraManager) cameraManager.setTrack(track.path, track.trackWidth);
@@ -208,32 +227,39 @@ cameraManager = new CameraManager(renderer.domElement, {
   gridPoint, gridTangent, gridNormal, path: track.path, trackWidth: track.trackWidth,
 });
 
-// [M] faz os rivais andarem pela pista, para testar enquanto
-// a IA não está pronta 
-const DEMO_SPEED = 14; // unidades por segundo
-let driving = false;
+// texto no canto da tela com a dificuldade da IA
+const difficultyBox = document.createElement('div');
+Object.assign(difficultyBox.style, {
+  position: 'fixed', bottom: '8px', right: '8px',
+  padding: '6px 10px', background: 'rgba(0,0,0,0.6)', color: '#fff',
+  font: '12px/1.5 monospace', zIndex: '5', pointerEvents: 'none',
+  borderRadius: '4px',
+});
+document.body.appendChild(difficultyBox);
+let aiRunning = false;
+function updateDifficultyBox() {
+  difficultyBox.textContent =
+    `IA: ${DIFFICULTIES[difficulty].label} [N]  |  ${aiRunning ? 'correndo' : 'parada'} [M]`;
+}
+updateDifficultyBox();
 
 window.addEventListener('keydown', (event) => {
   if (event.code === 'KeyM') {
-    driving = !driving;
-    racers.forEach((r) => { if (!r.userData.isPlayer) r.speed = driving ? DEMO_SPEED : 0; });
+    // [M] liga e desliga os rivais
+    aiRunning = !aiRunning;
+    aiControllers.forEach((ai) => { ai.enabled = aiRunning; });
+    updateDifficultyBox();
+  } else if (event.code === 'KeyN') {
+    // [N] troca a dificuldade: fácil, normal e difícil
+    const next = (DIFFICULTY_ORDER.indexOf(difficulty) + 1) % DIFFICULTY_ORDER.length;
+    difficulty = DIFFICULTY_ORDER[next];
+    aiControllers.forEach((ai) => ai.setDifficulty(difficulty));
+    updateDifficultyBox();
   } else if (event.key === 'Enter' ) {
     currentTrackIndex = (currentTrackIndex + 1) % TRACK_CONFIGS.length;
     loadTrack(currentTrackIndex);
   }
 });
-
-// avança um piloto pela curva, mantendo o deslocamento lateral do grid
-function driveRacer(racer, delta) {
-  racer.userData.u = (racer.userData.u + (DEMO_SPEED * delta) / trackLength + 1) % 1;
-  const u = racer.userData.u;
-  const tangent = track.path.getTangentAt(u).normalize();
-  const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
-  racer.position.copy(track.path.getPointAt(u))
-    .addScaledVector(normal, racer.userData.side);
-  racer.position.y = 0.01;
-  racer.rotation.y = Math.atan2(tangent.x, tangent.z);
-}
 
 window.addEventListener('resize', () => {
   cameraManager.resize(window.innerWidth, window.innerHeight);
@@ -247,17 +273,15 @@ renderer.setAnimationLoop(() => {
   const t = clock.elapsedTime;
 
   if (controleJogador) controleJogador.atualizar(delta);
-  racers.forEach((r) => {
-    if (driving && !r.userData.isPlayer) driveRacer(r, delta);
-    r.update(delta);
-  });
+  aiControllers.forEach((ai) => ai.update(delta));
+  racers.forEach((r) => r.update(delta, racers));
   itemBoxes.forEach((itemBox) => {
     itemBox.rotation.y += delta * 1.5;
     itemBox.position.y = 1 + Math.sin(t * 2) * 0.1;
   });
   cameraManager.update(delta);
   renderer.render(scene, cameraManager.camera);
-  // limpa as teclas "apertadas neste frame" depois que todos já leram
+  // limpa as teclas apertadas neste frame depois que todos já leram
   teclado.fimDoFrame();
 });
 
@@ -273,10 +297,18 @@ ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
     racers.push(racer);
     if (name === 'Mario') {
       // as câmeras 4 e 5 seguem o alvoCamera do jogador, que acompanha o
-      // kart mas não gira junto quando ele rodopia
+      // kart mas não gira junto quando ele roda
       controleJogador = new PlayerController({ racer, track, scene, teclado });
       cameraManager.setFollowTarget(controleJogador.alvoCamera);
       cameraManager.setView('chase');
+    } else {
+      // os outros pilotos são controlados pela IA. items fica null até o
+      // sistema de itens existir
+      const ai = new AIController({
+        racer, track, personality: name, difficulty, obstacles, racers, items: null,
+      });
+      ai.enabled = aiRunning;
+      aiControllers.push(ai);
     }
   } catch (e) {
     showErr(`${name} falhou: ` + (e.stack || e.message));
