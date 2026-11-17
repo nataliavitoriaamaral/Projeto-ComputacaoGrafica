@@ -1,6 +1,4 @@
-// main.js
-// Integração da pista com Mario, Luigi, Peach e Bowser no grid de largada.
-// localClippingEnabled precisa ser true, senão o Racer não corta
+// Integração da pista com Mario, Luigi, Peach e Bowser no grid de largada
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -21,6 +19,10 @@ import { createItemBox } from './objects/ItemBox.js';
 import { createOilSlick } from './objects/OilSlick.js';
 
 import { LightController } from './lighting/LightController.js';
+
+// teclado e controle do kart do jogador
+import { Input } from './gameplay/Input.js';
+import { PlayerController } from './gameplay/PlayerController.js';
 
 // caixa de erro visível na tela, para quando o console estiver fechado
 const errBox = document.createElement('div');
@@ -59,7 +61,7 @@ const gridPoint = new THREE.Vector3();
 const gridTangent = new THREE.Vector3();
 const gridNormal = new THREE.Vector3();
 
-// Listas para gerenciar descarte e atualização dos objetos cênicos da pista
+// Listas para gerenciar descarte e atualização dos objetos da pista
 const trackObjects = [];
 const itemBoxes = [];
 const racers = [];
@@ -136,7 +138,7 @@ scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 // perceber a diferença ao desligar as luzes ([L] e [K])
 scene.environmentIntensity = 0.3;
 
-// pilotos na ordem do grid; cada um precisa de um preset em kartPresets.js
+// pilotos na ordem do grid
 const ROSTER = [
   { name: 'Mario',  kartPreset: 'mario',  characterFactory: createMario  },
   { name: 'Luigi',  kartPreset: 'luigi',  characterFactory: createLuigi  },
@@ -147,8 +149,13 @@ const ROSTER = [
 // criado depois da primeira pista, para já nascer com o grid certo
 let cameraManager = null;
 
+// Teclado e controle do jogador. O jogador é o Mario, e o controle só é
+// criado quando o modelo dele termina de carregar 
+const teclado = new Input();
+let controleJogador = null;
+
 function loadTrack(index) {
-  // 1. Limpa a pista, o grid e a paisagem antigos
+  // Limpa a pista, o grid e a paisagem antigos
   if (track) {
     scene.remove(track);
     track.dispose();
@@ -161,10 +168,10 @@ function loadTrack(index) {
   // compartilhados e voltam a ser usados quando a pista aparecer de novo
   if (scenery) scene.remove(scenery);
 
-  // 2. Limpa os objetos cênicos anteriores
+  // Limpa os objetos cênicos anteriores
   clearTrackObjects();
 
-  // 3. Instancia a nova pista a partir da configuração
+  // Instancia a nova pista a partir da configuração
   const config = TRACK_CONFIGS[index];
   track = new Track(config);
   scene.add(track);
@@ -174,7 +181,7 @@ function loadTrack(index) {
   scene.add(scenery);
   scene.background.set(config.skyColor);
 
-  // 4. Novo grid de largada e dados do circuito
+  // Novo grid de largada e dados do circuito
   grid = new StartingGrid(track, { slots: ROSTER.length });
   scene.add(grid);
   trackLength = track.path.getLength();
@@ -183,36 +190,34 @@ function loadTrack(index) {
   gridNormal.copy(grid.normal);
   lightController.setTrack(track);
 
-  // 5. Repopula a nova pista com objetos
+  // Repopula a nova pista com objetos
   populateTrackObjects();
 
-  // 6. Reposiciona os pilotos nas suas vagas do novo grid
+  // Reposiciona os pilotos nas suas vagas do novo grid
   racers.forEach((racer) => grid.placeRacer(racer, racer.userData.slot));
+  // o jogador volta a ficar parado na vaga dele
+  if (controleJogador) controleJogador.trocarPista(track);
 
-  // 7. Atualiza a curva usada pelo CameraManager (os vetores do grid já
-  //    foram atualizados no lugar, no passo 4)
+  // Atualiza a curva usada pelo CameraManager 
   if (cameraManager) cameraManager.setTrack(track.path, track.trackWidth);
 }
 
 loadTrack(currentTrackIndex);
 
-// Entrega 3: todas as câmeras (livre, perseguição, piloto), a projeção
-// perspectiva e as teclas de troca ficam em src/cameras/CameraManager.js
 cameraManager = new CameraManager(renderer.domElement, {
   gridPoint, gridTangent, gridNormal, path: track.path, trackWidth: track.trackWidth,
 });
 
-// "modo demo": [Espaço] faz os pilotos andarem pela pista, para mostrar
-// // as câmeras de perseguição e do piloto em movimento
+// [M] faz os rivais andarem pela pista, para testar enquanto
+// a IA não está pronta 
 const DEMO_SPEED = 14; // unidades por segundo
 let driving = false;
 
 window.addEventListener('keydown', (event) => {
-  if (event.code === 'Space') {
+  if (event.code === 'KeyM') {
     driving = !driving;
-    racers.forEach((r) => { r.speed = driving ? DEMO_SPEED : 0; });
-    event.preventDefault();
-  }else if (event.key === 'Enter' ) {
+    racers.forEach((r) => { if (!r.userData.isPlayer) r.speed = driving ? DEMO_SPEED : 0; });
+  } else if (event.key === 'Enter' ) {
     currentTrackIndex = (currentTrackIndex + 1) % TRACK_CONFIGS.length;
     loadTrack(currentTrackIndex);
   }
@@ -240,8 +245,10 @@ const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const delta = clock.getDelta();
   const t = clock.elapsedTime;
+
+  if (controleJogador) controleJogador.atualizar(delta);
   racers.forEach((r) => {
-    if (driving) driveRacer(r, delta);
+    if (driving && !r.userData.isPlayer) driveRacer(r, delta);
     r.update(delta);
   });
   itemBoxes.forEach((itemBox) => {
@@ -250,9 +257,11 @@ renderer.setAnimationLoop(() => {
   });
   cameraManager.update(delta);
   renderer.render(scene, cameraManager.camera);
+  // limpa as teclas "apertadas neste frame" depois que todos já leram
+  teclado.fimDoFrame();
 });
 
-// carregamento em paralelo; uma falha não interrompe os demais
+// carregamento em paralelo
 ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
   try {
     const racer = await createRacer({ kartPreset, characterFactory });
@@ -262,7 +271,13 @@ ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
     racer.idleWheelSpeed = 4; // rodas girando no lugar, esperando o start
     scene.add(racer);
     racers.push(racer);
-    if (name === 'Mario') cameraManager.setFollowTarget(racer); // câmeras 4 e 5
+    if (name === 'Mario') {
+      // as câmeras 4 e 5 seguem o alvoCamera do jogador, que acompanha o
+      // kart mas não gira junto quando ele rodopia
+      controleJogador = new PlayerController({ racer, track, scene, teclado });
+      cameraManager.setFollowTarget(controleJogador.alvoCamera);
+      cameraManager.setView('chase');
+    }
   } catch (e) {
     showErr(`${name} falhou: ` + (e.stack || e.message));
   }
