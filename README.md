@@ -20,11 +20,18 @@ Para ver só o preview dos obstáculos e objetos, acesse "/obstaculos.html" no m
 
 | Tecla | Ação |
 |-------|------|
+| **↑** / **W** | Acelera o kart do Mario |
+| **↓** / **S** | Freia (com o kart parado, segurar dá ré) |
+| **←** / **A** e **→** / **D** | Vira o kart |
+| **Espaço** / **Shift** | Pula; segurando na curva vira drift |
+| **E** / **X** | Usa o item guardado (cogumelo, casco verde ou banana) |
+| **F** | Mostra/esconde o painel com os valores da física |
+| **M** | Liga/desliga a IA dos rivais (Luigi, Peach e Bowser) |
+| **N** | Troca a dificuldade da IA |
 | **1** / **2** / **3** | Câmera livre (OrbitControls): largada, circuito completo, trecho com obstáculos |
 | **4** | Câmera de perseguição (3ª pessoa) atrás do Mario |
 | **5** | Câmera do piloto (1ª pessoa) |
 | **C** | Próxima câmera |
-| **Espaço** | Liga/desliga o modo demo (os pilotos andam pela pista) |
 | **L** | Liga/desliga a luz ambiente |
 | **K** | Liga/desliga a luz direcional (sol e sombras) |
 | **0** | Liga/desliga o holofote da largada |
@@ -49,8 +56,30 @@ Para ver o efeito das texturas com a luz, use a vista da largada (tecla 1) e alt
 - **Paisagens** em "src/scenery/": cada pista tem um tema ("scenery" no "trackConfigd.js") e uma cor de céu ("skyColor"). O campo tem montanhas com neve e pinheiros; o deserto, platôs, cactos e pedras; a cidade à noite, prédios com faixas de neon e postes. As peças ficam em "sceneryProps.js", feitas só com primitivas (cone, cilindro, caixa, esfera e dodecaedro) e materiais com cor, "flatShading" e, na cidade, emissivo (sem imagens). Geometrias e materiais são criados uma vez e compartilhados entre todas as cópias. "Scenery.js" espalha as peças de três formas (em anel no fundo, sorteadas pelo terreno ou ao longo da pista) e só aceita lugares que não encostam na pista nem em outra peça.
 - **Pórtico de largada** em cima da linha de chegada: dois postes (CylinderGeometry) e uma faixa (BoxGeometry) com o letreiro "START" desenhado num canvas.
 - **Grid de largada** em zigue-zague, como no Mario Kart, com uma marca branca em cada vaga ("src/track/StartingGrid.js").
-- **Integração com a pista** usando pontos e tangentes da curva (getPointAt e getTangentAt) para posicionar e orientar pilotos e objetos. Deslocamentos laterais distribuem os elementos pela largura da pista. As caixas de item flutuam com "Math.sin" e giram no loop de animação.
-- **Modo demo** (tecla Espaço): cada piloto guarda a posição na curva ("userData.u") e o deslocamento lateral ("userData.side"), e a cada frame avança 14 unidades por segundo pela pista. Serve para mostrar as câmeras de perseguição e de piloto em movimento, com as rodas girando de acordo com a velocidade.
+- **Integração com a pista** usando pontos e tangentes da curva (getPointAt e getTangentAt) para posicionar e orientar pilotos e objetos. Deslocamentos laterais distribuem os elementos pela largura da pista. Cada piloto guarda a posição na curva ("userData.u") e o deslocamento lateral ("userData.side").
+- **Controle do jogador** ("src/gameplay/PlayerController.js" e "Input.js"): aceleração, freio, ré, curva, pulo e drift do kart do Mario, com partículas no drift ("ParticulasKart.js").
+- **Rivais com IA** ("src/gameplay/AIController.js"): Luigi, Peach e Bowser seguem a pista, desviam dos obstáculos e das bananas e usam itens. Têm três dificuldades (tecla N).
+- **Itens e coletáveis** ("src/gameplay/Items.js"; ver a seção "Itens e coletáveis").
+
+### Itens e coletáveis
+
+Tudo é controlado por "src/gameplay/Items.js", recriado a cada troca de pista com "items.setTrack(track)". Os modelos ficam em "src/objects/" e são feitos só com primitivas:
+
+- "Coin.js": cilindro achatado, toro (aro) e caixa fina, com material dourado metálico e um pouco emissivo;
+- "GreenShell.js": meia esfera com textura de hexágonos desenhada em canvas, toro e cilindro brancos;
+- "Banana.js": três arcos de toro (as abas da casca), uma esfera esticada e um cilindro (o cabinho).
+
+Moedas e bananas compartilham geometrias e materiais entre todas as cópias.
+
+Funcionamento:
+
+- **Moedas**: ficam em fileiras pela pista e voltam 10 s depois de pegas. Cada moeda aumenta 2% a velocidade máxima, até 10 moedas. Ser atingido por um item faz perder 1 moeda.
+- **Caixas de item**: duas fileiras de três caixas (u = 0,15 e 0,55). Ao quebrar uma, a roleta gira por 1,8 s e sorteia cogumelo, casco verde ou banana. Quem já tem item só quebra a caixa. A caixa volta depois de 3 s.
+- **Cogumelo**: turbo de 1,5 s.
+- **Casco verde**: sai em linha reta na direção do nariz do kart, quica nos muros (até 6 vezes) e some depois de 7 s. Quem é atingido fica atordoado.
+- **Banana**: fica atrás do kart. Quem passa por cima roda, a não ser que esteja pulando. As bananas entram na lista de obstáculos que a IA desvia, e no máximo 8 ficam na pista ao mesmo tempo.
+
+A colisão é por proximidade: cada objeto tem um raio, e a cada frame a distância ao quadrado no plano XZ é comparada com cada kart (sem raiz quadrada). Os objetos usam o mesmo par "u"/"side" dos karts para se posicionar na pista ("getPointAt(u) + N × side"). O casco faz duas verificações por frame para não atravessar um kart por estar rápido demais. Um quadro no canto superior direito mostra o item do jogador; durante a roleta os ícones vão trocando e a borda fica amarela.
 
 ### Personagens e karts
 
@@ -86,6 +115,7 @@ O projeto usa mais de três texturas, de origens diferentes:
 | "oil-slick.svg" | SVG | manchas de óleo |
 | logo do capô (letra, Bowser ou coroa) | canvas 2D | capô de cada kart |
 | "?" da caixa de item | canvas 2D | caixas de item |
+| hexágonos do casco | canvas 2D | casco verde |
 | xadrez e letreiro "START" | canvas 2D | faixa de largada e pórtico |
 | "_diffuse.png" e "_normal.png" | arquivos dos modelos | Mario, Luigi, Peach e Bowser |
 
@@ -163,7 +193,13 @@ src/
     kartTextures.js         # carrega e recorta as texturas dos karts
     Character.js            # loader de personagem .gltf, com reparo de texturas e meshes
     Racer.js                # junta kart + personagem e coloca as mãos no volante
-  objects/                  # cone, barril, pneus, caixa de item, óleo
+  gameplay/
+    Input.js                # leitura do teclado (segurada, apertada, solta)
+    PlayerController.js     # controle e física do kart do jogador
+    ParticulasKart.js       # partículas do drift (também usadas pelos itens)
+    AIController.js         # IA dos rivais, com três dificuldades
+    Items.js                # moedas, caixas, roleta, cogumelo, casco verde e banana
+  objects/                  # cone, barril, pneus, caixa de item, óleo, moeda, casco verde, banana
     loadObstacleTexture.js  # carrega as texturas SVG dos obstáculos
   track/
     Track.js                # pista, grama, zebras, muros, faixa e pórtico de largada
@@ -190,8 +226,8 @@ public/
 - As peças da paisagem ainda não usam imagens, só cor, "flatShading" e material emissivo.
 - Na pilha de pneus, o quadrado do SVG é esticado ao longo do anel (o contorno do anel é cerca de 2,6 vezes maior que o do tubo). Como o padrão é de losangos, o efeito é discreto.
 - As imagens dos karts e do asfalto foram tiradas da internet e ainda não estão listadas em [public/CREDITS.md](public/CREDITS.md), que cobre só os modelos 3D.
-- No modo demo todos os pilotos têm a mesma velocidade, então mantêm a formação do grid.
-- Ainda não há movimento controlado pelo jogador, colisão, faróis nos karts, itens funcionais, som nem lógica de corrida. O modo demo só leva os pilotos por uma trajetória fixa.
+- Os itens emitem eventos ("coin", "itemHit", "itemPickup" e "itemUse") para a pontuação e os sons. Enquanto o "Game.js" não existe, eles só ficam disponíveis por "items.on(evento, fn)".
+- Ainda não há colisão entre karts, faróis, som nem lógica de corrida (voltas, posições e chegada).
 
 ## Créditos
 
