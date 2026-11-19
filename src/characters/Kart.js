@@ -1,7 +1,6 @@
-// Kart.js
-// Monta um kart estilo Mario Kart com primitivas do Three.js.
-// Rodas giram em update() usando omega = v/r.
-// As diferenças entre personagens ficam em kartPresets.js.
+
+// Rodas giram em update() usando omega = v/r
+// As diferenças entre personagens ficam em kartPresets.js
 
 import * as THREE from 'three';
 import { KART_PRESETS } from './kartPresets.js';
@@ -20,14 +19,13 @@ export class Kart extends THREE.Group {
     this.scale.setScalar(this.config.scale ?? 1);
 
     this.speed = 0;
-    // giro em ponto morto: as rodas giram sem o kart sair do lugar,
-    // dando a ideia de que o piloto está acelerando esperando a largada
+    // as rodas giram mesmo com o kart parado, para dar a sensação que o piloto está acelerando para a largada
     this.idleWheelSpeed = 0;
 
     this.wheelRadius = 0.32;
     this.wheelWidth  = 0.28;
 
-    // capô: guardado para reutilizar no posicionamento do logo
+    // no capô, o topo fica inclinado para trás, como num kart de corrida
     this.hoodTilt   = -0.60;
     this.hoodCenter = new THREE.Vector3(0, this.wheelRadius + 0.42, 0.68);
     this.hoodDepth  = 0.14;
@@ -69,7 +67,6 @@ export class Kart extends THREE.Group {
     body.receiveShadow = true;
     this.add(body);
 
-    // bico curto: termina logo depois das rodas da frente (z = 0.60 + raio)
     const noseGeo = new THREE.BoxGeometry(0.88, 0.22, 0.18);
     const nose = new THREE.Mesh(noseGeo, mat);
     nose.position.set(0, this.wheelRadius + 0.03, 0.86);
@@ -138,7 +135,7 @@ export class Kart extends THREE.Group {
     this.add(back);
   }
 
-  // rampa inclinada na frente, com o topo voltado para trás
+  // capô inclinado para trás
   _buildFrontHood() {
     const mat = new THREE.MeshStandardMaterial({
       color: this.config.bodyColor,
@@ -155,7 +152,7 @@ export class Kart extends THREE.Group {
     this.add(hood);
   }
 
-  // disco com a letra, grudado na face inclinada do capô
+  // disco com a letra, grudado no capô
   _buildLogoBadge() {
     const tex = makeEmblemTexture(this.config.emblem);
     const mat = new THREE.MeshStandardMaterial({
@@ -180,7 +177,7 @@ export class Kart extends THREE.Group {
 
   _buildSeat() {
     const mat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, // branco: o couro aparece com a cor da própria imagem
+      color: 0xffffff, // o couro aparece com a cor da própria imagem
       map: texBanco,
       roughness: 0.75,
       metalness: 0.0,
@@ -192,7 +189,7 @@ export class Kart extends THREE.Group {
     seat.castShadow = true;
     this.add(seat);
 
-    // seatBackHeight = 0 remove o encosto (no Bowser, o casco faz esse papel)
+    // seatBackHeight = 0 remove o encosto. Usado no bowser
     const backHeight = this.config.seatBackHeight ?? 0.58;
     if (backHeight > 0) {
       const backGeo = new THREE.BoxGeometry(0.55, backHeight, 0.10);
@@ -206,9 +203,8 @@ export class Kart extends THREE.Group {
     this.seatAnchor.set(0, this.wheelRadius + 0.32, -0.15);
   }
 
-  // Fecha o cockpit, como num kart de corrida: paredes laterais entre os
-  // flancos e o capô, e o capô estendido para trás até a frente do piloto.
-  // Essa parte do capô cobre as pernas (que foram cortadas pelo clipping plane).
+  // Fecha o cockpit, como num kart de corrida
+  // Essa parte do capô cobre as pernas que foram cortadas pelo clipping plane
   _buildCockpit() {
     const bodyMat = new THREE.MeshStandardMaterial({
       color: this.config.bodyColor, map: texLataria,
@@ -224,7 +220,7 @@ export class Kart extends THREE.Group {
       this.add(wall);
     }
 
-    // capô sobre as pernas: da frente do banco até o capô inclinado
+    // capô sobre as pernas
     const back = 0.0;
     const front = 0.62;
     const legCoverGeo = new THREE.BoxGeometry(0.86, 0.04, front - back);
@@ -245,7 +241,7 @@ export class Kart extends THREE.Group {
 
     const group = new THREE.Group();
     group.name = 'steering';
-    // steeringOffsetZ aproxima o volante do piloto (negativo = para trás)
+    // para aproximar o volante do piloto
     group.position.z = this.config.steeringOffsetZ ?? 0;
 
     const tilt = -0.5;
@@ -270,12 +266,14 @@ export class Kart extends THREE.Group {
     spoke.position.copy(ring.position);
     spoke.rotation.copy(ring.rotation);
     group.add(spoke);
+    // guardado para o PlayerController girar o raio junto com o aro
+    this.raioVolante = spoke;
 
     this.add(group);
   }
 
   // canos inclinados a 45°
-  // 'triple': 3 cilindros. 'twinCone': 2 canos cônicos.
+  // 'triple': 3 cilindros 'twinCone': 2 canos cônicos
   _buildExhausts() {
     const pipeMat = new THREE.MeshStandardMaterial({
       color: this.config.exhaustPipeColor, roughness: 0.25, metalness: 0.9,
@@ -303,7 +301,7 @@ export class Kart extends THREE.Group {
 
         const center = base.clone().addScaledVector(axis, L / 2);
 
-        // topo mais estreito que a base = formato cônico
+        // topo mais estreito que a base para dar a impressão de que o cano é cônico
         const pipeGeo = new THREE.CylinderGeometry(0.075, 0.12, L, 20);
         const pipe = new THREE.Mesh(pipeGeo, pipeMat);
         pipe.position.copy(center);
@@ -373,8 +371,7 @@ export class Kart extends THREE.Group {
     const group = new THREE.Group();
 
     // A CylinderGeometry tem 3 grupos de faces: lateral, tampa de cima e
-    // tampa de baixo. Com um array de materiais, cada grupo usa o seu:
-    // a banda de rodagem na lateral e o desenho da roda nas tampas.
+    // tampa de baixo
     const treadMat = new THREE.MeshStandardMaterial({
       color: 0xffffff, map: texPneuBanda, roughness: 0.9,
     });
@@ -394,8 +391,7 @@ export class Kart extends THREE.Group {
     return group;
   }
 
-  // v = omega * r  =>  omega = v / r
-  // com o kart parado usa idleWheelSpeed, senão as rodas ficariam travadas
+  // v = omega * r 
   update(delta) {
     const v = this.speed !== 0 ? this.speed : this.idleWheelSpeed;
     // raio efetivo, considerando a escala do kart

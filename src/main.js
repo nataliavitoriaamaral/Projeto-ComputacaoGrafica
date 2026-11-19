@@ -1,6 +1,4 @@
-// main.js
-// Integração da pista com Mario, Luigi, Peach e Bowser no grid de largada.
-// localClippingEnabled precisa ser true, senão o Racer não corta
+// Integração da pista com Mario, Luigi, Peach e Bowser no grid de largada
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -21,6 +19,12 @@ import { createItemBox } from './objects/ItemBox.js';
 import { createOilSlick } from './objects/OilSlick.js';
 
 import { LightController } from './lighting/LightController.js';
+
+// teclado e controle do kart do jogador
+import { Input } from './gameplay/Input.js';
+import { PlayerController } from './gameplay/PlayerController.js';
+// adversários com IA
+import { AIController, DIFFICULTIES } from './gameplay/AIController.js';
 
 // caixa de erro visível na tela, para quando o console estiver fechado
 const errBox = document.createElement('div');
@@ -54,15 +58,17 @@ let scenery = null; // paisagem da pista atual (src/scenery/Scenery.js)
 let trackLength = 0;
 
 // Vetores do grid, compartilhados com o CameraManager. São atualizados com
-// copy() a cada troca de pista, para a câmera continuar com as mesmas referências.
+// copy() a cada troca de pista para a câmera continuar com as mesmas referências
 const gridPoint = new THREE.Vector3();
 const gridTangent = new THREE.Vector3();
 const gridNormal = new THREE.Vector3();
 
-// Listas para gerenciar descarte e atualização dos objetos cênicos da pista
+// Listas para gerenciar descarte e atualização dos objetos da pista
 const trackObjects = [];
 const itemBoxes = [];
 const racers = [];
+// obstáculos que a IA desvia 
+const obstacles = [];
 
 // posiciona os objetos pela curva, com deslocamento lateral e altura
 function placeObject(object, u, sideOffset, height = 0.01) {
@@ -73,6 +79,9 @@ function placeObject(object, u, sideOffset, height = 0.01) {
   object.position.copy(point).addScaledVector(normal, sideOffset);
   object.position.y += height;
   object.rotation.y = Math.atan2(tangent.x, tangent.z);
+  // posição na pista lida pela IA para desviar
+  object.userData.u = u;
+  object.userData.side = sideOffset;
   scene.add(object);
 
   //salva o objeto para removar após trocar de pista, senão ele fica flutuando no ar
@@ -102,6 +111,10 @@ function populateTrackObjects() {
       itemBoxes.push(itemBox);
     });
   });
+
+  trackObjects.forEach((obj) => {
+    if (!itemBoxes.includes(obj)) obstacles.push(obj);
+  });
 }
 
 // remove os objetos da pista anterior e libera a memória deles
@@ -112,6 +125,7 @@ function clearTrackObjects() {
   });
   trackObjects.length = 0;
   itemBoxes.length = 0;
+  obstacles.length = 0;
 }
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -132,11 +146,11 @@ document.body.appendChild(renderer.domElement);
 // env map para iluminar áreas sem luz direta (sem ele o Luigi ficava muito escuro)
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-// intensidade menor que a padrão; caso contrário ele ilumina quase tudo e não é possível
+// intensidade menor que a padrão para
 // perceber a diferença ao desligar as luzes ([L] e [K])
 scene.environmentIntensity = 0.3;
 
-// pilotos na ordem do grid; cada um precisa de um preset em kartPresets.js
+// pilotos na ordem do grid
 const ROSTER = [
   { name: 'Mario',  kartPreset: 'mario',  characterFactory: createMario  },
   { name: 'Luigi',  kartPreset: 'luigi',  characterFactory: createLuigi  },
@@ -147,8 +161,18 @@ const ROSTER = [
 // criado depois da primeira pista, para já nascer com o grid certo
 let cameraManager = null;
 
+// Teclado e controle do jogador. O jogador é o Mario, e o controle só é
+// criado quando o modelo dele termina de carregar 
+const teclado = new Input();
+let controleJogador = null;
+
+// um AIController para cada rival (Luigi, Peach e Bowser)
+const aiControllers = [];
+const DIFFICULTY_ORDER = ['easy', 'normal', 'hard'];
+let difficulty = 'normal';
+
 function loadTrack(index) {
-  // 1. Limpa a pista, o grid e a paisagem antigos
+  // Limpa a pista, o grid e a paisagem antigos
   if (track) {
     scene.remove(track);
     track.dispose();
@@ -161,10 +185,10 @@ function loadTrack(index) {
   // compartilhados e voltam a ser usados quando a pista aparecer de novo
   if (scenery) scene.remove(scenery);
 
-  // 2. Limpa os objetos cênicos anteriores
+  // Limpa os objetos cênicos anteriores
   clearTrackObjects();
 
-  // 3. Instancia a nova pista a partir da configuração
+  // Instancia a nova pista a partir da configuração
   const config = TRACK_CONFIGS[index];
   track = new Track(config);
   scene.add(track);
@@ -174,7 +198,7 @@ function loadTrack(index) {
   scene.add(scenery);
   scene.background.set(config.skyColor);
 
-  // 4. Novo grid de largada e dados do circuito
+  // Novo grid de largada e dados do circuito
   grid = new StartingGrid(track, { slots: ROSTER.length });
   scene.add(grid);
   trackLength = track.path.getLength();
@@ -183,52 +207,59 @@ function loadTrack(index) {
   gridNormal.copy(grid.normal);
   lightController.setTrack(track);
 
-  // 5. Repopula a nova pista com objetos
+  // Repopula a nova pista com objetos
   populateTrackObjects();
 
-  // 6. Reposiciona os pilotos nas suas vagas do novo grid
+  // Reposiciona os pilotos nas suas vagas do novo grid
   racers.forEach((racer) => grid.placeRacer(racer, racer.userData.slot));
+  // o jogador volta a ficar parado na vaga dele
+  if (controleJogador) controleJogador.trocarPista(track);
+  // os rivais também voltam para a vaga, parados
+  aiControllers.forEach((ai) => ai.setTrack(track));
 
-  // 7. Atualiza a curva usada pelo CameraManager (os vetores do grid já
-  //    foram atualizados no lugar, no passo 4)
+  // Atualiza a curva usada pelo CameraManager 
   if (cameraManager) cameraManager.setTrack(track.path, track.trackWidth);
 }
 
 loadTrack(currentTrackIndex);
 
-// Entrega 3: todas as câmeras (livre, perseguição, piloto), a projeção
-// perspectiva e as teclas de troca ficam em src/cameras/CameraManager.js
 cameraManager = new CameraManager(renderer.domElement, {
   gridPoint, gridTangent, gridNormal, path: track.path, trackWidth: track.trackWidth,
 });
 
-// "modo demo": [Espaço] faz os pilotos andarem pela pista, para mostrar
-// // as câmeras de perseguição e do piloto em movimento
-const DEMO_SPEED = 14; // unidades por segundo
-let driving = false;
+// texto no canto da tela com a dificuldade da IA
+const difficultyBox = document.createElement('div');
+Object.assign(difficultyBox.style, {
+  position: 'fixed', bottom: '8px', right: '8px',
+  padding: '6px 10px', background: 'rgba(0,0,0,0.6)', color: '#fff',
+  font: '12px/1.5 monospace', zIndex: '5', pointerEvents: 'none',
+  borderRadius: '4px',
+});
+document.body.appendChild(difficultyBox);
+let aiRunning = false;
+function updateDifficultyBox() {
+  difficultyBox.textContent =
+    `IA: ${DIFFICULTIES[difficulty].label} [N]  |  ${aiRunning ? 'correndo' : 'parada'} [M]`;
+}
+updateDifficultyBox();
 
 window.addEventListener('keydown', (event) => {
-  if (event.code === 'Space') {
-    driving = !driving;
-    racers.forEach((r) => { r.speed = driving ? DEMO_SPEED : 0; });
-    event.preventDefault();
-  }else if (event.key === 'Enter' ) {
+  if (event.code === 'KeyM') {
+    // [M] liga e desliga os rivais
+    aiRunning = !aiRunning;
+    aiControllers.forEach((ai) => { ai.enabled = aiRunning; });
+    updateDifficultyBox();
+  } else if (event.code === 'KeyN') {
+    // [N] troca a dificuldade: fácil, normal e difícil
+    const next = (DIFFICULTY_ORDER.indexOf(difficulty) + 1) % DIFFICULTY_ORDER.length;
+    difficulty = DIFFICULTY_ORDER[next];
+    aiControllers.forEach((ai) => ai.setDifficulty(difficulty));
+    updateDifficultyBox();
+  } else if (event.key === 'Enter' ) {
     currentTrackIndex = (currentTrackIndex + 1) % TRACK_CONFIGS.length;
     loadTrack(currentTrackIndex);
   }
 });
-
-// avança um piloto pela curva, mantendo o deslocamento lateral do grid
-function driveRacer(racer, delta) {
-  racer.userData.u = (racer.userData.u + (DEMO_SPEED * delta) / trackLength + 1) % 1;
-  const u = racer.userData.u;
-  const tangent = track.path.getTangentAt(u).normalize();
-  const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
-  racer.position.copy(track.path.getPointAt(u))
-    .addScaledVector(normal, racer.userData.side);
-  racer.position.y = 0.01;
-  racer.rotation.y = Math.atan2(tangent.x, tangent.z);
-}
 
 window.addEventListener('resize', () => {
   cameraManager.resize(window.innerWidth, window.innerHeight);
@@ -240,19 +271,21 @@ const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const delta = clock.getDelta();
   const t = clock.elapsedTime;
-  racers.forEach((r) => {
-    if (driving) driveRacer(r, delta);
-    r.update(delta);
-  });
+
+  if (controleJogador) controleJogador.atualizar(delta);
+  aiControllers.forEach((ai) => ai.update(delta));
+  racers.forEach((r) => r.update(delta, racers));
   itemBoxes.forEach((itemBox) => {
     itemBox.rotation.y += delta * 1.5;
     itemBox.position.y = 1 + Math.sin(t * 2) * 0.1;
   });
   cameraManager.update(delta);
   renderer.render(scene, cameraManager.camera);
+  // limpa as teclas apertadas neste frame depois que todos já leram
+  teclado.fimDoFrame();
 });
 
-// carregamento em paralelo; uma falha não interrompe os demais
+// carregamento em paralelo
 ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
   try {
     const racer = await createRacer({ kartPreset, characterFactory });
@@ -262,7 +295,21 @@ ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
     racer.idleWheelSpeed = 4; // rodas girando no lugar, esperando o start
     scene.add(racer);
     racers.push(racer);
-    if (name === 'Mario') cameraManager.setFollowTarget(racer); // câmeras 4 e 5
+    if (name === 'Mario') {
+      // as câmeras 4 e 5 seguem o alvoCamera do jogador, que acompanha o
+      // kart mas não gira junto quando ele roda
+      controleJogador = new PlayerController({ racer, track, scene, teclado });
+      cameraManager.setFollowTarget(controleJogador.alvoCamera);
+      cameraManager.setView('chase');
+    } else {
+      // os outros pilotos são controlados pela IA. items fica null até o
+      // sistema de itens existir
+      const ai = new AIController({
+        racer, track, personality: name, difficulty, obstacles, racers, items: null,
+      });
+      ai.enabled = aiRunning;
+      aiControllers.push(ai);
+    }
   } catch (e) {
     showErr(`${name} falhou: ` + (e.stack || e.message));
   }

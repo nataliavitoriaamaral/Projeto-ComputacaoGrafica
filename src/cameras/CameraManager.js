@@ -1,5 +1,4 @@
-// CameraManager.js
-// Câmeras do jogo (entrega 3). O main.js chama update(delta) a cada frame
+// O main.js chama update(delta) a cada frame
 // e renderiza com manager.camera, que é a câmera ativa.
 //
 // Matriz de projeção:
@@ -27,22 +26,22 @@ export class CameraManager {
     // o piloto que as câmeras de perseguição/primeira pessoa acompanham
     this.followTarget = null;
 
-    // câmera livre (mouse)
+    // câmera livre com o mouse
     this.orbitCamera = this._makeCamera(50);
     this.controls = new OrbitControls(this.orbitCamera, domElement);
 
-    // perseguição: 3ª pessoa, atrás do kart
+    // câmera atrás do Kart
     this.chaseCamera = this._makeCamera(65);
     this._chaseOffset = new THREE.Vector3(0, 3.4, -8);   // atrás e acima do kart
     this._chaseLookAhead = new THREE.Vector3(0, 1.2, 6); // olha um pouco à frente
     this._chaseReady = false;
 
-    // piloto: 1ª pessoa, na altura dos olhos
+    // câmera em primeira pessoa
     this.driverCamera = this._makeCamera(80);
     this._driverEye = new THREE.Vector3(0, 1.75, 0.15);
     this._driverLookAt = new THREE.Vector3(0, 1.5, 10);
 
-    // vistas disponíveis; a tecla de cada uma e a lista usada no HUD
+    // visualizaçoes diferentes, cada uma com sua câmera e controles
     this.views = [
       { id: 'largada',   key: '1', name: 'Largada (livre)',          camera: this.orbitCamera,  orbit: true },
       { id: 'circuito',  key: '2', name: 'Circuito completo (livre)', camera: this.orbitCamera,  orbit: true },
@@ -51,7 +50,7 @@ export class CameraManager {
       { id: 'driver',    key: '5', name: 'Piloto (1ª pessoa)',       camera: this.driverCamera, orbit: false },
     ];
 
-    // câmera ortográfica, só para comparar com a perspectiva (tecla P)
+    // câmera ortográfica, só para comparar com a perspectiva 
     this.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, NEAR, FAR);
     this.orthoMode = false;
 
@@ -64,7 +63,7 @@ export class CameraManager {
     this.setView('largada');
   }
 
-  // aqui a matriz de projeção perspectiva é criada (ver comentário no topo)
+  // matriz de projeção perspectiva para cada câmera
   _makeCamera(fov) {
     return new THREE.PerspectiveCamera(fov, this.aspect, NEAR, FAR);
   }
@@ -105,7 +104,7 @@ export class CameraManager {
     if (id === 'largada') this._presetStart();
     if (id === 'circuito') this._presetOverview();
     if (id === 'obstaculos') this._presetObstacles();
-    if (id === 'chase') this._chaseReady = false; // posiciona direto, sem "voar" até lá
+    if (id === 'chase') this._chaseReady = false; 
 
     if (id === 'chase') this._updateChase(0);
     if (id === 'driver') this._updateDriver();
@@ -118,7 +117,7 @@ export class CameraManager {
     this.setView(this.views[(this.activeIndex + 1) % this.views.length].id);
   }
 
-  // posições da câmera livre (as mesmas teclas 1, 2 e 3 da entrega anterior)
+  // posições da câmera livre 
   _presetStart() {
     const { point, tangent, normal } = this.grid;
     this.orbitCamera.position.copy(point)
@@ -183,12 +182,11 @@ export class CameraManager {
     else if (id === 'driver') this._updateDriver();
     else this.controls.update();
 
-    // na vista livre o OrbitControls atua diretamente na câmera ortográfica
     if (this.orthoMode && !this.view.orbit) this._syncOrtho();
   }
 
-  // 3ª pessoa: a câmera vai atrás do kart com suavização (lerp) para não
-  // "tremer" quando o kart faz curva
+  
+  // para terceira pessoa, a câmera fica atrás do kart
   _updateChase(delta) {
     const target = this.followTarget;
     if (!target) return;
@@ -208,7 +206,7 @@ export class CameraManager {
     this.chaseCamera.lookAt(lookAt);
   }
 
-  // 1ª pessoa: câmera presa ao kart, na posição dos olhos do piloto
+  // primeira pessoa
   _updateDriver() {
     const target = this.followTarget;
     if (!target) return;
@@ -222,11 +220,11 @@ export class CameraManager {
     );
   }
 
-  // comparação perspectiva x ortográfica (tecla P)
+  // variação das perspectivas
   _syncOrtho() {
     const src = this.view.camera;
 
-    // ponto de referência: o que a câmera está olhando
+    // ponto de referência para saber para onde a câmera está vendo
     const ref = this.view.orbit ? this.controls.target
       : (this.followTarget ? this.followTarget.position : this.grid.point);
 
@@ -243,7 +241,6 @@ export class CameraManager {
   }
 
   toggleOrtho() {
-    // na vista do piloto o chão fica rente ao horizonte: não serve de comparação
     if (this.view.id === 'driver') return;
     if (!this.orthoMode) {
       this._syncOrtho();
@@ -266,7 +263,7 @@ export class CameraManager {
     this._refreshHud();
   }
 
-  // FOV maior = mais "grande angular", mais distorção nas bordas;
+  // FOV maior = mais "grande angular", mais distorção nas bordas
   // FOV menor = "zoom", perspectiva mais achatada
   changeFov(step) {
     const keepOrtho = this.orthoMode;
@@ -302,7 +299,7 @@ export class CameraManager {
       if (view) return this.setView(view.id);
 
       const k = event.key.toLowerCase();
-      if (k === 'c') this.nextView();            // C alterna entre as vistas
+      if (k === 'c') this.nextView();            // C alterna entre as câmeras
       if (k === 'p') this.toggleOrtho();         // P compara com ortográfica
       if (k === 'h') this.hud.style.display = this.hud.style.display === 'none' ? 'block' : 'none';
       if (event.key === '+' || event.key === '=') this.changeFov(-5);
@@ -310,7 +307,7 @@ export class CameraManager {
     });
   }
 
-  // HUD (canto superior direito)
+  // canto superior direito com informações da câmera e controles
   _createHud() {
     this.hud = document.createElement('div');
     Object.assign(this.hud.style, {
@@ -334,7 +331,8 @@ export class CameraManager {
       ...this.views.map((v, i) => `${i === this.activeIndex ? '>' : ' '} [${v.key}] ${v.name}`),
       '',
       '[C] próxima câmera   [P] perspectiva/ortográfica',
-      '[+/-] FOV   [Espaço] pilotos andam   [H] esconde HUD',
+      '[+/-] FOV   [M] rivais andam (demo)   [H] esconde HUD',
+      '[Setas/WASD] pilotar   [Espaço/Shift] pulo e drift   [F] física',
       '[L] ambiente   [K] sol   [0] holofote',
       '[Enter] Alterna Pista',
     ];

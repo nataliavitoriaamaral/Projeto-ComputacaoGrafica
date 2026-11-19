@@ -1,7 +1,6 @@
-// Character.js
 // Carrega personagem de .gltf, redimensiona para uma altura alvo,
 // encosta no chão e tenta consertar texturas e meshes espelhadas
-// que o loader não trata direito nos modelos do Sketchfab.
+// que o loader não trata direito nos modelos do Sketchfab
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -16,6 +15,7 @@ export class Character extends THREE.Group {
     arms = [],
     hipFraction,
     posture = [],
+    pescoco,
   }) {
     super();
     this.name = name;
@@ -24,8 +24,10 @@ export class Character extends THREE.Group {
     this.arms = arms;
     // altura do quadril em relação à altura total (padrão no Racer: 0.45)
     this.hipFraction = hipFraction;
-    // correções de pose: [{ bone, pitch }], pitch em graus no eixo X
+    // correções de pose
     this._posture = posture;
+    // nome do osso girado no Racer para o personagem virar a cabeça
+    this.pescoco = pescoco;
     this._materialMapMirrors = materialMapMirrors;
 
     this._url = url;
@@ -72,9 +74,7 @@ export class Character extends THREE.Group {
     return this;
   }
 
-  // Gira cada osso da lista em torno do eixo X do personagem. Pitch negativo
-  // inclina para trás. Os ossos filhos acompanham a rotação.
-  // Usado no Bowser, cujo modelo vem curvado para frente.
+  // Gira cada osso da lista em torno do eixo X do personagem
   _applyPosture() {
     if (!this._posture.length) return;
     const xAxis = new THREE.Vector3(1, 0, 0);
@@ -112,7 +112,7 @@ export class Character extends THREE.Group {
   }
 
   // tenta carregar <nome>_diffuse.png, _normal.png e _specularGlossiness.png
-  // da pasta de texturas para os materiais que vieram sem map.
+  // da pasta de texturas para os materiais que vieram sem map
   async _patchMissingMaps() {
     const texLoader = new THREE.TextureLoader();
     const cache = new Map();
@@ -124,9 +124,6 @@ export class Character extends THREE.Group {
           url,
           (tex) => {
             tex.flipY = false;
-            // algumas meshes do Luigi (o branco do olho direito) têm UV > 1 e
-            // contam com a textura se repetindo. no modo clamp, que é o padrão
-            // do TextureLoader, elas só pegavam a borda transparente e sumiam.
             tex.wrapS = THREE.RepeatWrapping;
             tex.wrapT = THREE.RepeatWrapping;
             if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
@@ -192,7 +189,7 @@ export class Character extends THREE.Group {
 
   // o Luigi veio sem o PNG de alguns materiais do lado direito. o lado direito
   // é o espelho do esquerdo, então é possível reaproveitar a textura do par que
-  // existe invertendo o eixo U: repeat.x = -1 e offset.x = 1 fazem u virar 1-u.
+  // existe invertendo o eixo 
   _mirrorMaterialMap(pairs) {
     const materials = new Map();
     this.model.traverse((obj) => {
@@ -222,8 +219,7 @@ export class Character extends THREE.Group {
     }
   }
 
-  // alguns materiais vinham transparentes ou só com uma face; força todos a
-  // aparecerem dos dois lados e sem transparência
+  // alguns materiais vinham transparentes ou só com uma face
   _fixMaterialVisibility() {
     this.model.traverse((obj) => {
       if (!obj.isMesh) return;
@@ -246,7 +242,7 @@ export class Character extends THREE.Group {
   }
 
   // meshes com escala negativa (determinante < 0) ficam com os triângulos
-  // virados para o lado errado; a ordem dos vértices é invertida para corrigir
+  // virados para o lado errado. A ordem dos vértices é invertida para corrigir
   _fixMirroredMeshes() {
     this.model.updateMatrixWorld(true);
 
@@ -294,6 +290,7 @@ export function createMario(overrides = {}) {
       ['mixamorigLeftArm_09', 'mixamorigLeftForeArm_010', 'mixamorigLeftHand_011'],
       ['mixamorigRightArm_017', 'mixamorigRightForeArm_018', 'mixamorigRightHand_019'],
     ],
+    pescoco: 'mixamorigNeck_05',
     ...overrides,
   }).ready;
 }
@@ -308,11 +305,12 @@ export function createLuigi(overrides = {}) {
       ['L_upperarm_024', 'L_forearm_025', 'L_hand_026'],
       ['R_upperarm_041', 'R_forearm_042', 'R_hand_043'],
     ],
+    pescoco: 'head_05',
     ...overrides,
   }).ready;
 }
 
-// Os arquivos da Peach e do Bowser incluem animação, que não é utilizada.
+// Os arquivos da Peach e do Bowser incluem animação, que não é utilizada
 
 export function createPeach(overrides = {}) {
   return new Character({
@@ -324,6 +322,7 @@ export function createPeach(overrides = {}) {
       ['mixamorigLeftArm_08', 'mixamorigLeftForeArm_09', 'mixamorigLeftHand_010'],
       ['mixamorigRightArm_028', 'mixamorigRightForeArm_029', 'mixamorigRightHand_030'],
     ],
+    pescoco: 'mixamorigNeck_00',
     ...overrides,
   }).ready;
 }
@@ -343,6 +342,7 @@ export function createBowser(overrides = {}) {
       ['LeftArm_020', 'LeftForeArm_021', 'LeftHandRoll_022'],
       ['RightArm_037', 'RightForeArm_038', 'RightHandRoll_039'],
     ],
+    pescoco: 'Head_052',
     ...overrides,
   }).ready;
 }
