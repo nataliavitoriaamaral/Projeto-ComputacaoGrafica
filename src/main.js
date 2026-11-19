@@ -15,16 +15,17 @@ import { CameraManager } from './cameras/CameraManager.js';
 import { createCone } from './objects/Cone.js';
 import { createBarrel } from './objects/Barrel.js';
 import { createTireStack } from './objects/TireStack.js';
-import { createItemBox } from './objects/ItemBox.js';
 import { createOilSlick } from './objects/OilSlick.js';
 
 import { LightController } from './lighting/LightController.js';
 
 // teclado e controle do kart do jogador
-import { Input } from './gameplay/Input.js';
+import { Input, MAPA_TECLAS } from './gameplay/Input.js';
 import { PlayerController } from './gameplay/PlayerController.js';
 // adversários com IA
 import { AIController, DIFFICULTIES } from './gameplay/AIController.js';
+// moedas, caixas de item e itens (cogumelo, casco verde e banana)
+import { Items } from './gameplay/Items.js';
 
 // caixa de erro visível na tela, para quando o console estiver fechado
 const errBox = document.createElement('div');
@@ -65,7 +66,6 @@ const gridNormal = new THREE.Vector3();
 
 // Listas para gerenciar descarte e atualização dos objetos da pista
 const trackObjects = [];
-const itemBoxes = [];
 const racers = [];
 // obstáculos que a IA desvia 
 const obstacles = [];
@@ -103,18 +103,8 @@ function populateTrackObjects() {
   placeObject(createOilSlick(), 0.24, -1.8);
   placeObject(createOilSlick(), 0.64, 2);
 
-  // Caixas de itens flutuando
-  [0.15, 0.55].forEach((u) => {
-    [-3, 0, 3].forEach((sideOffset) => {
-      const itemBox = createItemBox();
-      placeObject(itemBox, u, sideOffset, 1);
-      itemBoxes.push(itemBox);
-    });
-  });
-
-  trackObjects.forEach((obj) => {
-    if (!itemBoxes.includes(obj)) obstacles.push(obj);
-  });
+  // as caixas de item agora são criadas e controladas pelo Items.js
+  trackObjects.forEach((obj) => obstacles.push(obj));
 }
 
 // remove os objetos da pista anterior e libera a memória deles
@@ -124,7 +114,6 @@ function clearTrackObjects() {
     disposeObject(obj);
   });
   trackObjects.length = 0;
-  itemBoxes.length = 0;
   obstacles.length = 0;
 }
 
@@ -163,8 +152,12 @@ let cameraManager = null;
 
 // Teclado e controle do jogador. O jogador é o Mario, e o controle só é
 // criado quando o modelo dele termina de carregar 
-const teclado = new Input();
+// [E] ou [X] usa o item. A ação entra no mapa daqui, sem mexer no Input.js
+const teclado = new Input({ ...MAPA_TECLAS, usarItem: ['KeyE', 'KeyX'] });
 let controleJogador = null;
+
+// moedas, caixas e itens; criado depois da primeira pista
+let items = null;
 
 // um AIController para cada rival (Luigi, Peach e Bowser)
 const aiControllers = [];
@@ -216,12 +209,17 @@ function loadTrack(index) {
   if (controleJogador) controleJogador.trocarPista(track);
   // os rivais também voltam para a vaga, parados
   aiControllers.forEach((ai) => ai.setTrack(track));
+  // moedas e caixas da pista nova; itens e moedas dos pilotos zerados
+  if (items) items.setTrack(track);
 
   // Atualiza a curva usada pelo CameraManager 
   if (cameraManager) cameraManager.setTrack(track.path, track.trackWidth);
 }
 
 loadTrack(currentTrackIndex);
+
+// as bananas entram na lista de obstáculos para a IA desviar delas
+items = new Items({ scene, track, racers, obstacles });
 
 cameraManager = new CameraManager(renderer.domElement, {
   gridPoint, gridTangent, gridNormal, path: track.path, trackWidth: track.trackWidth,
@@ -270,15 +268,15 @@ const clock = new THREE.Clock();
 
 renderer.setAnimationLoop(() => {
   const delta = clock.getDelta();
-  const t = clock.elapsedTime;
 
-  if (controleJogador) controleJogador.atualizar(delta);
+  if (controleJogador) {
+    controleJogador.atualizar(delta);
+    if (teclado.foiApertada('usarItem')) items.use(controleJogador.racer);
+  }
   aiControllers.forEach((ai) => ai.update(delta));
   racers.forEach((r) => r.update(delta, racers));
-  itemBoxes.forEach((itemBox) => {
-    itemBox.rotation.y += delta * 1.5;
-    itemBox.position.y = 1 + Math.sin(t * 2) * 0.1;
-  });
+  // depois que todos andaram: coleta, roleta, cascos e bananas
+  items.update(delta);
   cameraManager.update(delta);
   renderer.render(scene, cameraManager.camera);
   // limpa as teclas apertadas neste frame depois que todos já leram
@@ -302,10 +300,10 @@ ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
       cameraManager.setFollowTarget(controleJogador.alvoCamera);
       cameraManager.setView('chase');
     } else {
-      // os outros pilotos são controlados pela IA. items fica null até o
-      // sistema de itens existir
+      // os outros pilotos são controlados pela IA, que usa os itens pelo
+      // items.useItem(racer)
       const ai = new AIController({
-        racer, track, personality: name, difficulty, obstacles, racers, items: null,
+        racer, track, personality: name, difficulty, obstacles, racers, items,
       });
       ai.enabled = aiRunning;
       aiControllers.push(ai);
