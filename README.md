@@ -26,8 +26,8 @@ Para ver só o preview dos obstáculos e objetos, acesse "/obstaculos.html" no m
 | **Espaço** / **Shift** | Pula; segurando na curva vira drift |
 | **E** / **X** | Usa o item guardado (cogumelo, casco verde ou banana) |
 | **F** | Mostra/esconde o painel com os valores da física |
-| **M** | Liga/desliga a IA dos rivais (Luigi, Peach e Bowser) |
-| **N** | Troca a dificuldade da IA |
+| **Esc** | Pausa e continua a corrida (trocar de aba também pausa) |
+| **R** | Reinicia a corrida (vai direto para a contagem regressiva) |
 | **1** / **2** / **3** | Câmera livre (OrbitControls): largada, circuito completo, trecho com obstáculos |
 | **4** | Câmera de perseguição (3ª pessoa) atrás do Mario |
 | **5** | Câmera do piloto (1ª pessoa) |
@@ -35,10 +35,10 @@ Para ver só o preview dos obstáculos e objetos, acesse "/obstaculos.html" no m
 | **L** | Liga/desliga a luz ambiente |
 | **K** | Liga/desliga a luz direcional (sol e sombras) |
 | **0** | Liga/desliga o holofote da largada |
-| **Enter** | Troca para a próxima variação de pista |
+| **Enter** | Começa a corrida no menu e joga de novo na tela final |
 | **+** / **-** | Diminui/aumenta o FOV da câmera ativa |
 | **P** | Alterna perspectiva/ortográfica (só para comparar o efeito da perspectiva) |
-| **H** | Esconde/mostra o HUD |
+| **H** | Esconde/mostra o painel de ajuda das câmeras (canto superior direito) |
 
 Na câmera livre: botão esquerdo gira, botão direito move e a roda dá zoom.
 
@@ -52,7 +52,7 @@ Para ver o efeito das texturas com a luz, use a vista da largada (tecla 1) e alt
 - Como os modelos vêm em T-pose, "sentar" o personagem é simulado afundando o quadril até o nível do assento e usando um clipping plane horizontal para esconder tudo que fica abaixo.
 - **Obstáculos e objetos do cenário** feitos só com primitivas (cone, barril, pilha de pneus, caixa de item e mancha de óleo), em "src/objects/". Cada um é uma função que retorna um THREE.Group.
 - **Texturas** em karts, personagens, pista e obstáculos, com as coordenadas UV tratadas em cada caso (ver a seção "Texturas e mapeamento UV").
-- **Variações de pista** (tecla Enter): as configurações ficam em "src/track/trackConfigd.js" (Circuito Tradicional, Deserto e Neon). Cada uma define os pontos de controle da curva, a largura e as cores, inclusive o filtro de cor aplicado sobre a foto do asfalto. Ao trocar, a pista, o grid de largada e os objetos são recriados, e os pilotos voltam às suas vagas.
+- **Variações de pista** (escolhidas no menu inicial): as configurações ficam em "src/track/trackConfigd.js" (Circuito Tradicional, Deserto e Neon). Cada uma define os pontos de controle da curva, a largura e as cores, inclusive o filtro de cor aplicado sobre a foto do asfalto. Ao trocar, a pista, o grid de largada e os objetos são recriados, e os pilotos voltam às suas vagas.
 - **Paisagens** em "src/scenery/": cada pista tem um tema ("scenery" no "trackConfigd.js") e uma cor de céu ("skyColor"). O campo tem montanhas com neve e pinheiros; o deserto, platôs, cactos e pedras; a cidade à noite, prédios com faixas de neon e postes. As peças ficam em "sceneryProps.js", feitas só com primitivas (cone, cilindro, caixa, esfera e dodecaedro) e materiais com cor, "flatShading" e, na cidade, emissivo (sem imagens). Geometrias e materiais são criados uma vez e compartilhados entre todas as cópias. "Scenery.js" espalha as peças de três formas (em anel no fundo, sorteadas pelo terreno ou ao longo da pista) e só aceita lugares que não encostam na pista nem em outra peça.
 - **Pórtico de largada** em cima da linha de chegada: dois postes (CylinderGeometry) e uma faixa (BoxGeometry) com o letreiro "START" desenhado num canvas.
 - **Grid de largada** em zigue-zague, como no Mario Kart, com uma marca branca em cada vaga ("src/track/StartingGrid.js").
@@ -80,6 +80,42 @@ Funcionamento:
 - **Banana**: fica atrás do kart. Quem passa por cima roda, a não ser que esteja pulando. As bananas entram na lista de obstáculos que a IA desvia, e no máximo 8 ficam na pista ao mesmo tempo.
 
 A colisão é por proximidade: cada objeto tem um raio, e a cada frame a distância ao quadrado no plano XZ é comparada com cada kart (sem raiz quadrada). Os objetos usam o mesmo par "u"/"side" dos karts para se posicionar na pista ("getPointAt(u) + N × side"). O casco faz duas verificações por frame para não atravessar um kart por estar rápido demais. Um quadro no canto superior direito mostra o item do jogador; durante a roleta os ícones vão trocando e a borda fica amarela.
+
+### Regras da corrida, pontuação e telas
+
+Arquivos: "src/gameplay/Game.js" (regras, sem DOM), "src/ui/HUD.js" (telas) e a integração no "main.js".
+
+**Estados.** O jogo passa por "menu" → "countdown" → "racing" → "finished", com "paused" em qualquer momento da corrida. No menu o jogador escolhe a pista e a dificuldade dos rivais e vê o recorde. A contagem é 3, 2, 1, JÁ!, com os karts parados; só no JÁ! o jogador e a IA são liberados. Ao trocar de aba ou de janela a corrida pausa sozinha.
+
+**Voltas e checkpoints.** A corrida tem 3 voltas. A pista é dividida em 8 trechos (checkpoints, o último é a linha de chegada) e cada piloto precisa passar por todos em ordem para a volta contar. Como os karts largam atrás da linha, a primeira passagem por ela não conta volta. Andar de ré não adianta nada, porque o progresso diminui junto, e o HUD avisa "CONTRAMÃO". Um salto repentino de "u" (teleporte, troca de pista) é ignorado em vez de virar volta.
+
+**Posição.** Calculada a cada frame pelo progresso contínuo na pista (voltas + fração). Quem já terminou fica à frente, na ordem de chegada. A corrida do jogador acaba quando ele termina as 3 voltas: a posição dele é a ordem em que cruzou a linha.
+
+**Pontuação.**
+
+| Origem | Pontos |
+|--------|--------|
+| Moeda coletada | +10 |
+| Item que acertou um rival (evento "itemHit") | +100 |
+| Batida em que o jogador participa (evento "collision") | −25, com intervalo de 0,8 s entre batidas |
+| Bônus pela posição final | 1º: 1000, 2º: 600, 3º: 300, 4º: 100 |
+| Bônus de tempo | +10 por segundo abaixo do tempo de referência (3 voltas a 16 u/s) |
+
+A pontuação na tela nunca fica negativa. Só pontuam eventos que acontecem com a corrida valendo (nada na contagem, na pausa ou depois do fim), e só os do jogador.
+
+**Vitória e derrota.** Terminar em 1º mostra "VITÓRIA!"; em qualquer outra posição, "DERROTA". Nos dois casos a tela mostra o pódio, o ranking com os tempos, o detalhe da pontuação e se bateu o recorde. Os botões e as teclas **R** e **Enter** reiniciam.
+
+**Recorde.** A maior pontuação e a melhor volta de cada pista ficam no "localStorage" do navegador (chave "mariokart3d:recordes"). Se o navegador bloquear o armazenamento, o jogo continua normalmente, só sem salvar.
+
+**HUD.** Volta, posição, tempo, melhor volta, pontos, moedas (de 0 a 10, as que dão bônus de velocidade), item atual (ou a roleta girando) e um minimapa com a pista e os 4 pilotos. Avisos rápidos aparecem no topo ("+10", "ACERTOU!", "BATIDA", tempo de cada volta).
+
+**Contrato com os outros sistemas** (combinado no grupo):
+
+- "racer.userData": "u", "side", "speed", "isPlayer" e "state" são escritos pelos controllers. O "Game.js" escreve "lap" (voltas completas, de 0 a 3) e "position" (1 a 4).
+- "game.emit(evento, dados)" e "game.on(evento, fn)". Eventos que o jogo escuta: "coin { racer }", "itemHit { attacker, target, item }" e "collision { racer, other }". O "collision" vale para qualquer batida em que o jogador seja "racer", "other", "a", "b", "target" ou "attacker". Eventos que o jogo emite: "lap", "finish", "state", "countdown", "start", "wrongWay" e "record".
+- O "main.js" carrega "src/gameplay/Collision.js" sozinho quando o arquivo existir e exportar uma classe "Collision" (ver o comentário no "main.js" para o que ela recebe). Sem ele o jogo roda normalmente, só sem batidas.
+
+**Testes.** A lógica do "Game.js" tem testes automáticos em "tests/Game.test.mjs" (contagem, voltas, ré, cortar caminho, posição, pontuação, recorde, reinício). Rodar com "npm test".
 
 ### Personagens e karts
 
@@ -199,6 +235,9 @@ src/
     ParticulasKart.js       # partículas do drift (também usadas pelos itens)
     AIController.js         # IA dos rivais, com três dificuldades
     Items.js                # moedas, caixas, roleta, cogumelo, casco verde e banana
+    Game.js                 # estados, eventos, contagem, voltas, posição, pontuação e recorde
+  ui/
+    HUD.js                  # HUD, minimapa, menu, pausa e telas de vitória e derrota
   objects/                  # cone, barril, pneus, caixa de item, óleo, moeda, casco verde, banana
     loadObstacleTexture.js  # carrega as texturas SVG dos obstáculos
   track/
@@ -211,6 +250,8 @@ src/
   utils/
     dispose.js              # libera geometrias e materiais da GPU ao trocar de pista
     loadTexture.js          # carrega imagens de public/textures/ (karts e asfalto)
+tests/
+  Game.test.mjs             # testes da lógica da corrida (npm test)
 public/
   textures/                 # SVGs dos obstáculos (cone-hazard, barrel-wood, tire-tread, oil-slick)
   textures/kart/            # imagens: lataria, banco, pneu, roda e asfalto
@@ -226,8 +267,9 @@ public/
 - As peças da paisagem ainda não usam imagens, só cor, "flatShading" e material emissivo.
 - Na pilha de pneus, o quadrado do SVG é esticado ao longo do anel (o contorno do anel é cerca de 2,6 vezes maior que o do tubo). Como o padrão é de losangos, o efeito é discreto.
 - As imagens dos karts e do asfalto foram tiradas da internet e ainda não estão listadas em [public/CREDITS.md](public/CREDITS.md), que cobre só os modelos 3D.
-- Os itens emitem eventos ("coin", "itemHit", "itemPickup" e "itemUse") para a pontuação e os sons. Enquanto o "Game.js" não existe, eles só ficam disponíveis por "items.on(evento, fn)".
-- Ainda não há colisão entre karts, faróis, som nem lógica de corrida (voltas, posições e chegada).
+- Os itens emitem eventos ("coin", "itemHit", "itemPickup" e "itemUse"). O "Game.js" usa "coin" e "itemHit" na pontuação; os outros ficam disponíveis por "items.on(evento, fn)", por exemplo para sons.
+- As moedas voltam depois de 10 s, então dá para juntar mais de 10 numa corrida. O limite de 10 vale para o bônus de velocidade, não para os pontos.
+- Colisões entre karts e com obstáculos, e os sons, dependem do Membro 3 ("Collision.js").
 
 ## Créditos
 

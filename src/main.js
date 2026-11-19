@@ -26,6 +26,9 @@ import { PlayerController } from './gameplay/PlayerController.js';
 import { AIController, DIFFICULTIES } from './gameplay/AIController.js';
 // moedas, caixas de item e itens (cogumelo, casco verde e banana)
 import { Items } from './gameplay/Items.js';
+// regras da corrida, pontuação e telas (Membro 5)
+import { Game, STATES } from './gameplay/Game.js';
+import { HUD } from './ui/HUD.js';
 
 // caixa de erro visível na tela, para quando o console estiver fechado
 const errBox = document.createElement('div');
@@ -164,6 +167,14 @@ const aiControllers = [];
 const DIFFICULTY_ORDER = ['easy', 'normal', 'hard'];
 let difficulty = 'normal';
 
+// Regras da corrida: estados, voltas, posição, pontuação e eventos. Os outros
+// sistemas avisam o jogo com game.emit('coin' | 'itemHit' | 'collision', ...)
+const game = new Game();
+game.setRacers(racers);
+let hud = null;
+// sistema de colisões do Membro 3 (opcional, ver mais abaixo)
+let collision = null;
+
 function loadTrack(index) {
   // Limpa a pista, o grid e a paisagem antigos
   if (track) {
@@ -195,6 +206,7 @@ function loadTrack(index) {
   grid = new StartingGrid(track, { slots: ROSTER.length });
   scene.add(grid);
   trackLength = track.path.getLength();
+  game.setTrack(config.id, trackLength);
   gridPoint.copy(grid.point);
   gridTangent.copy(grid.tangent);
   gridNormal.copy(grid.normal);
@@ -211,6 +223,9 @@ function loadTrack(index) {
   aiControllers.forEach((ai) => ai.setTrack(track));
   // moedas e caixas da pista nova; itens e moedas dos pilotos zerados
   if (items) items.setTrack(track);
+  collision?.setTrack?.(track);
+  // minimapa da pista nova
+  if (hud) hud.setTrack(track);
 
   // Atualiza a curva usada pelo CameraManager 
   if (cameraManager) cameraManager.setTrack(track.path, track.trackWidth);
@@ -219,45 +234,118 @@ function loadTrack(index) {
 loadTrack(currentTrackIndex);
 
 // as bananas entram na lista de obstáculos para a IA desviar delas
-items = new Items({ scene, track, racers, obstacles });
+// game recebe os eventos coin e itemHit; o quadrado do item fica no HUD
+items = new Items({ scene, track, racers, obstacles, game, showSlot: false });
 
 cameraManager = new CameraManager(renderer.domElement, {
   gridPoint, gridTangent, gridNormal, path: track.path, trackWidth: track.trackWidth,
 });
 
-// texto no canto da tela com a dificuldade da IA
-const difficultyBox = document.createElement('div');
-Object.assign(difficultyBox.style, {
-  position: 'fixed', bottom: '8px', right: '8px',
-  padding: '6px 10px', background: 'rgba(0,0,0,0.6)', color: '#fff',
-  font: '12px/1.5 monospace', zIndex: '5', pointerEvents: 'none',
-  borderRadius: '4px',
-});
-document.body.appendChild(difficultyBox);
-let aiRunning = false;
-function updateDifficultyBox() {
-  difficultyBox.textContent =
-    `IA: ${DIFFICULTIES[difficulty].label} [N]  |  ${aiRunning ? 'correndo' : 'parada'} [M]`;
+// ---------------------------------------------------------------------------
+// Regras, HUD e telas (Membro 5)
+
+// Colisões (Membro 3). O arquivo só entra se existir em src/gameplay/Collision.js
+// e exportar a classe Collision. Ela recebe tudo que pode precisar e avisa o
+// jogo com game.emit('collision', { racer, other }); se tiver setTrack() e
+// reset(), eles são chamados na troca de pista e ao reiniciar.
+const collisionModules = import.meta.glob('./gameplay/Collision.js', { eager: true });
+const CollisionSystem = Object.values(collisionModules)[0]?.Collision ?? null;
+if (CollisionSystem) {
+  try {
+    collision = new CollisionSystem({
+      scene, track, racers, obstacles, trackObjects, game, items, aiControllers,
+    });
+  } catch (e) {
+    showErr('Collision falhou: ' + (e.stack || e.message));
+  }
 }
-updateDifficultyBox();
+
+// o jogo só começa depois que os 4 modelos carregaram
+function isReady() {
+  return racers.length === ROSTER.length && controleJogador !== null;
+}
+
+// volta todo mundo para a vaga do grid, parado, com itens e moedas zerados
+function resetRace() {
+  racers.forEach((racer) => grid.placeRacer(racer, racer.userData.slot));
+  if (controleJogador) controleJogador.trocarPista(track);
+  aiControllers.forEach((ai) => ai.setTrack(track));
+  items.reset();
+  collision?.reset?.();
+}
+
+// vai para a contagem regressiva (usado por Jogar, R e "Jogar de novo")
+function startRace() {
+  if (!isReady()) return;
+  resetRace(); // antes do startCountdown, que guarda a posição de largada
+  game.startCountdown();
+}
+
+function goToMenu() {
+  if (isReady()) resetRace();
+  game.openMenu();
+}
+
+// o jogador só dirige durante a corrida; os rivais continuam depois do fim,
+// para a pista não ficar parada atrás da tela de resultado
+game.on('state', ({ state }) => applyState(state));
+function applyState(state) {
+  const racing = state === STATES.RACING || state === STATES.PAUSED;
+  if (controleJogador) controleJogador.habilitado = racing;
+  const rivalsRun = racing || state === STATES.FINISHED;
+  aiControllers.forEach((ai) => { ai.enabled = rivalsRun; });
+}
+
+function setDifficulty(key) {
+  difficulty = key;
+  aiControllers.forEach((ai) => ai.setDifficulty(key));
+  hud.setSelection({ difficultyKey: key });
+}
+
+hud = new HUD({
+  game,
+  getItemInfo: () => (items && controleJogador ? items.getItemInfo(controleJogador.racer) : null),
+  tracks: TRACK_CONFIGS,
+  difficulties: DIFFICULTY_ORDER.map((key) => ({
+    key,
+    label: DIFFICULTIES[key].label.replace(/^./, (c) => c.toUpperCase()),
+  })),
+  actions: {
+    onStart: startRace,
+    onRestart: startRace,
+    onResume: () => game.resume(),
+    onMenu: goToMenu,
+    // a pista só troca no menu
+    onSelectTrack: (index) => {
+      if (game.state !== STATES.MENU) return;
+      currentTrackIndex = index;
+      loadTrack(index);
+      hud.setSelection({ trackIndex: index });
+    },
+    onSelectDifficulty: setDifficulty,
+  },
+});
+hud.setTrack(track);
+hud.setSelection({ trackIndex: currentTrackIndex, difficultyKey: difficulty });
 
 window.addEventListener('keydown', (event) => {
-  if (event.code === 'KeyM') {
-    // [M] liga e desliga os rivais
-    aiRunning = !aiRunning;
-    aiControllers.forEach((ai) => { ai.enabled = aiRunning; });
-    updateDifficultyBox();
-  } else if (event.code === 'KeyN') {
-    // [N] troca a dificuldade: fácil, normal e difícil
-    const next = (DIFFICULTY_ORDER.indexOf(difficulty) + 1) % DIFFICULTY_ORDER.length;
-    difficulty = DIFFICULTY_ORDER[next];
-    aiControllers.forEach((ai) => ai.setDifficulty(difficulty));
-    updateDifficultyBox();
-  } else if (event.key === 'Enter' ) {
-    currentTrackIndex = (currentTrackIndex + 1) % TRACK_CONFIGS.length;
-    loadTrack(currentTrackIndex);
+  if (event.repeat) return;
+  const state = game.state;
+  if (event.code === 'Escape') {
+    // [Esc] pausa e continua
+    game.togglePause();
+  } else if (event.code === 'KeyR') {
+    // [R] reinicia a corrida (não faz nada no menu)
+    if (state !== STATES.MENU) startRace();
+  } else if (event.code === 'Enter') {
+    // [Enter] começa no menu e joga de novo na tela final
+    if (state === STATES.MENU || state === STATES.FINISHED) startRace();
   }
 });
+
+// trocar de aba ou de janela pausa a corrida, para não perder voltas à toa
+window.addEventListener('blur', () => game.pause());
+document.addEventListener('visibilitychange', () => { if (document.hidden) game.pause(); });
 
 window.addEventListener('resize', () => {
   cameraManager.resize(window.innerWidth, window.innerHeight);
@@ -269,14 +357,22 @@ const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const delta = clock.getDelta();
 
-  if (controleJogador) {
-    controleJogador.atualizar(delta);
-    if (teclado.foiApertada('usarItem')) items.use(controleJogador.racer);
+  // na pausa nada se mexe (a câmera e o HUD continuam)
+  if (game.state !== STATES.PAUSED) {
+    if (controleJogador) {
+      controleJogador.atualizar(delta);
+      // só se pode usar item com a corrida valendo
+      if (game.isRacing && teclado.foiApertada('usarItem')) items.use(controleJogador.racer);
+    }
+    aiControllers.forEach((ai) => ai.update(delta));
+    racers.forEach((r) => r.update(delta, racers));
+    collision?.update?.(delta);
+    // depois que todos andaram: coleta, roleta, cascos e bananas
+    items.update(delta);
+    // por último: voltas, posição e pontos já com os karts nos lugares novos
+    game.update(delta);
   }
-  aiControllers.forEach((ai) => ai.update(delta));
-  racers.forEach((r) => r.update(delta, racers));
-  // depois que todos andaram: coleta, roleta, cascos e bananas
-  items.update(delta);
+  hud.update(delta);
   cameraManager.update(delta);
   renderer.render(scene, cameraManager.camera);
   // limpa as teclas apertadas neste frame depois que todos já leram
@@ -288,6 +384,7 @@ ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
   try {
     const racer = await createRacer({ kartPreset, characterFactory });
     racer.userData.slot = slot; // usado para reposicionar ao trocar de pista
+    racer.userData.displayName = name; // usado no ranking, no pódio e no minimapa
     grid.placeRacer(racer, slot);
     racer.speed = 0;          // parado na largada
     racer.idleWheelSpeed = 4; // rodas girando no lugar, esperando o start
@@ -299,15 +396,17 @@ ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
       controleJogador = new PlayerController({ racer, track, scene, teclado });
       cameraManager.setFollowTarget(controleJogador.alvoCamera);
       cameraManager.setView('chase');
+      applyState(game.state); // no menu o jogador nasce sem poder dirigir
     } else {
       // os outros pilotos são controlados pela IA, que usa os itens pelo
       // items.useItem(racer)
       const ai = new AIController({
         racer, track, personality: name, difficulty, obstacles, racers, items,
       });
-      ai.enabled = aiRunning;
       aiControllers.push(ai);
+      applyState(game.state);
     }
+    if (isReady()) hud.setReady(true);
   } catch (e) {
     showErr(`${name} falhou: ` + (e.stack || e.message));
   }

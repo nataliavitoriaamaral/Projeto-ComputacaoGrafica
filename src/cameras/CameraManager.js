@@ -331,10 +331,11 @@ export class CameraManager {
       ...this.views.map((v, i) => `${i === this.activeIndex ? '>' : ' '} [${v.key}] ${v.name}`),
       '',
       '[C] próxima câmera   [P] perspectiva/ortográfica',
-      '[+/-] FOV   [M] rivais andam (demo)   [H] esconde HUD',
-      '[Setas/WASD] pilotar   [Espaço/Shift] pulo e drift   [F] física',
+      '[+/-] FOV   [H] esconde este painel',
+      '[Setas/WASD] pilotar   [Espaço/Shift] pulo e drift   [E/X] item',
+      '[Esc] pausa   [R] reinicia   [F] física',
       '[L] ambiente   [K] sol   [0] holofote',
-      '[Enter] Alterna Pista',
+      '[Enter] começa a corrida / joga de novo',
     ];
     this.hud.textContent = lines.join('\n');
   }
