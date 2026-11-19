@@ -24,7 +24,11 @@ Para ver só o preview dos obstáculos e objetos, acesse "/obstaculos.html" no m
 | **4** | Câmera de perseguição (3ª pessoa) atrás do Mario |
 | **5** | Câmera do piloto (1ª pessoa) |
 | **C** | Próxima câmera |
-| **Espaço** | Liga/desliga o modo demo (os pilotos andam pela pista) |
+| **Setas / WASD** | Acelerar, frear, dar ré e virar o kart do jogador |
+| **Espaço / Shift** | Pular; segurar durante a curva para drift |
+| **M** / **N** | Liga/desliga os rivais e seleciona a dificuldade |
+| **F** | Mostra/esconde o painel de física |
+| **V** | Liga/desliga o som |
 | **L** | Liga/desliga a luz ambiente |
 | **K** | Liga/desliga a luz direcional (sol e sombras) |
 | **0** | Liga/desliga o holofote da largada |
@@ -145,6 +149,17 @@ Todos os materiais texturizados são "MeshStandardMaterial", então a cor de cad
 
 Com só a luz ambiente as texturas aparecem chapadas, sem volume. Com o sol aparecem os brilhos e as sombras projetadas sobre o asfalto. Com o holofote ligado, o grid ganha o círculo azul. A tecla **P** e o FOV não mudam isso, só o enquadramento.
 
+### Colisões, consequências e sons
+
+- **Detecção** em `src/gameplay/Collision.js`: duas esferas envolventes por kart e caixas `Box3` nos obstáculos. O segmento entre a posição anterior e a atual também é testado para detectar impactos entre frames.
+- **Consequências**: o cone é lançado e retorna após 6 segundos; o barril reduz a velocidade; os pneus causam recuo; o óleo chama `applyEffect('spin', 1)`. Karts recebem empurrões laterais proporcionais à massa, com o Bowser mais pesado. O limite lateral considera a largura da pista e do kart, mantendo a resposta do muro já implementada no jogador.
+- **Efeitos** em `CollisionEffects.js`: partículas de impacto com `ParticulasKart` e deslocamento temporário da câmera, restaurado antes da atualização seguinte.
+- **Sons** em `Sounds.js`: motor, batida, moeda e item com `Audio` e `AudioListener` do Three.js. Os buffers são gerados no código. O áudio é liberado após interação do usuário e pode ser desativado com **V**. Sons de moedas e itens são acionados pelos eventos do respectivo sistema.
+- **Eventos**: cada impacto emite `collision`, com o piloto, o obstáculo ou outro kart, o tipo e a velocidade. Contatos contínuos não geram eventos a cada frame. A integração com a pontuação e o reinício está descrita em [docs/colisoes.md](docs/colisoes.md).
+
+Testes automáticos: `node --test tests/collision.test.js tests/sounds.test.js`.
+Para conferir os impactos com os modelos reais, acessar `/tests/collision-browser.html` com o servidor Vite em execução.
+
 ## Estrutura
 
 ```
@@ -154,6 +169,10 @@ src/
     CameraManager.js        # câmeras, projeção perspectiva, HUD e teclas
   lighting/
     LightController.js      # luz ambiente, direcional (sol) e spot
+  gameplay/
+    Collision.js            # colisões, consequências e eventos de impacto
+    CollisionEffects.js     # partículas e tremor da câmera
+    Sounds.js               # motor e sons acionados por eventos
   preview-obstaculos.js     # cena separada para visualizar os objetos
   characters/
     Kart.js                 # kart procedural (estrutura comum)
@@ -190,8 +209,7 @@ public/
 - As peças da paisagem ainda não usam imagens, só cor, "flatShading" e material emissivo.
 - Na pilha de pneus, o quadrado do SVG é esticado ao longo do anel (o contorno do anel é cerca de 2,6 vezes maior que o do tubo). Como o padrão é de losangos, o efeito é discreto.
 - As imagens dos karts e do asfalto foram tiradas da internet e ainda não estão listadas em [public/CREDITS.md](public/CREDITS.md), que cobre só os modelos 3D.
-- No modo demo todos os pilotos têm a mesma velocidade, então mantêm a formação do grid.
-- Ainda não há movimento controlado pelo jogador, colisão, faróis nos karts, itens funcionais, som nem lógica de corrida. O modo demo só leva os pilotos por uma trajetória fixa.
+- O jogador e os rivais já possuem controles de movimento e reagem às colisões. A pontuação, as voltas e as telas de fim dependem da integração com o sistema de regras da corrida.
 
 ## Créditos
 

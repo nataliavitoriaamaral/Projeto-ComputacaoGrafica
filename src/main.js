@@ -25,6 +25,8 @@ import { Input } from './gameplay/Input.js';
 import { PlayerController } from './gameplay/PlayerController.js';
 // adversários com IA
 import { AIController, DIFFICULTIES } from './gameplay/AIController.js';
+import { Collision } from './gameplay/Collision.js';
+import { Sounds } from './gameplay/Sounds.js';
 
 // caixa de erro visível na tela, para quando o console estiver fechado
 const errBox = document.createElement('div');
@@ -170,6 +172,8 @@ let controleJogador = null;
 const aiControllers = [];
 const DIFFICULTY_ORDER = ['easy', 'normal', 'hard'];
 let difficulty = 'normal';
+let collisions = null;
+const sounds = new Sounds({ racers });
 
 function loadTrack(index) {
   // Limpa a pista, o grid e a paisagem antigos
@@ -216,6 +220,8 @@ function loadTrack(index) {
   if (controleJogador) controleJogador.trocarPista(track);
   // os rivais também voltam para a vaga, parados
   aiControllers.forEach((ai) => ai.setTrack(track));
+  collisions?.setTrack(track);
+  sounds.reset();
 
   // Atualiza a curva usada pelo CameraManager 
   if (cameraManager) cameraManager.setTrack(track.path, track.trackWidth);
@@ -226,6 +232,8 @@ loadTrack(currentTrackIndex);
 cameraManager = new CameraManager(renderer.domElement, {
   gridPoint, gridTangent, gridNormal, path: track.path, trackWidth: track.trackWidth,
 });
+collisions = new Collision({ scene, track, racers, obstacles });
+sounds.connect(collisions);
 
 // texto no canto da tela com a dificuldade da IA
 const difficultyBox = document.createElement('div');
@@ -274,12 +282,16 @@ renderer.setAnimationLoop(() => {
 
   if (controleJogador) controleJogador.atualizar(delta);
   aiControllers.forEach((ai) => ai.update(delta));
+  // depois do movimento: obstáculos, empurrões e limites da pista
+  collisions.update(delta);
   racers.forEach((r) => r.update(delta, racers));
   itemBoxes.forEach((itemBox) => {
     itemBox.rotation.y += delta * 1.5;
     itemBox.position.y = 1 + Math.sin(t * 2) * 0.1;
   });
   cameraManager.update(delta);
+  collisions.updateCamera(cameraManager.camera);
+  sounds.update(cameraManager.camera);
   renderer.render(scene, cameraManager.camera);
   // limpa as teclas apertadas neste frame depois que todos já leram
   teclado.fimDoFrame();
@@ -299,6 +311,7 @@ ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
       // as câmeras 4 e 5 seguem o alvoCamera do jogador, que acompanha o
       // kart mas não gira junto quando ele roda
       controleJogador = new PlayerController({ racer, track, scene, teclado });
+      collisions.register(racer, controleJogador);
       cameraManager.setFollowTarget(controleJogador.alvoCamera);
       cameraManager.setView('chase');
     } else {
@@ -309,6 +322,7 @@ ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
       });
       ai.enabled = aiRunning;
       aiControllers.push(ai);
+      collisions.register(racer, ai);
     }
   } catch (e) {
     showErr(`${name} falhou: ` + (e.stack || e.message));
