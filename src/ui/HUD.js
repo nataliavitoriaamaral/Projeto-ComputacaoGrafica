@@ -29,7 +29,7 @@ const CSS = `
 .kh-panel { background: rgba(10, 14, 30, 0.62); border: 2px solid rgba(255,255,255,0.85);
   border-radius: 14px; backdrop-filter: blur(3px); }
 
-.kh-stats { position: absolute; top: 12px; left: 12px; padding: 10px 16px; min-width: 190px; }
+.kh-stats { position: absolute; top: 46px; left: 12px; padding: 10px 16px; min-width: 190px; }
 .kh-stat-label { font-size: 11px; letter-spacing: 1.5px; opacity: 0.75; text-transform: uppercase; }
 .kh-lap { font-size: 22px; font-weight: 800; }
 .kh-pos { font-size: 54px; font-weight: 900; line-height: 1; margin: 2px 0 6px;

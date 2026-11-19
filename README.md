@@ -32,6 +32,7 @@ Para ver só o preview dos obstáculos e objetos, acesse "/obstaculos.html" no m
 | **4** | Câmera de perseguição (3ª pessoa) atrás do Mario |
 | **5** | Câmera do piloto (1ª pessoa) |
 | **C** | Próxima câmera |
+| **V** | Liga/desliga o som |
 | **L** | Liga/desliga a luz ambiente |
 | **K** | Liga/desliga a luz direcional (sol e sombras) |
 | **0** | Liga/desliga o holofote da largada |
@@ -113,9 +114,10 @@ A pontuação na tela nunca fica negativa. Só pontuam eventos que acontecem com
 
 - "racer.userData": "u", "side", "speed", "isPlayer" e "state" são escritos pelos controllers. O "Game.js" escreve "lap" (voltas completas, de 0 a 3) e "position" (1 a 4).
 - "game.emit(evento, dados)" e "game.on(evento, fn)". Eventos que o jogo escuta: "coin { racer }", "itemHit { attacker, target, item }" e "collision { racer, other }". O "collision" vale para qualquer batida em que o jogador seja "racer", "other", "a", "b", "target" ou "attacker". Eventos que o jogo emite: "lap", "finish", "state", "countdown", "start", "wrongWay" e "record".
-- O "main.js" carrega "src/gameplay/Collision.js" sozinho quando o arquivo existir e exportar uma classe "Collision" (ver o comentário no "main.js" para o que ela recebe). Sem ele o jogo roda normalmente, só sem batidas.
+- O "collision" vem do "Collision.js" com "{ racer, obstacle, other, type, speed }" (type: cone, barrel, tires, oil, kart ou wall). Colisão entre karts emite um evento para cada piloto; o "Game" desconta uma vez só por batida do jogador.
+- O "Sounds.js" é ligado só ao "Game" ("new Sounds({ racers, game })"), para cada som tocar uma vez.
 
-**Testes.** A lógica do "Game.js" tem testes automáticos em "tests/Game.test.mjs" (contagem, voltas, ré, cortar caminho, posição, pontuação, recorde, reinício). Rodar com "npm test".
+**Testes.** A lógica do "Game.js" tem testes automáticos em "tests/Game.test.mjs" (contagem, voltas, ré, cortar caminho, posição, pontuação, recorde, reinício). Rodar com "npm test"; os testes de colisão e som do Membro 3 rodam com "node --test tests/collision.test.js tests/sounds.test.js".
 
 ### Personagens e karts
 
@@ -211,6 +213,17 @@ Todos os materiais texturizados são "MeshStandardMaterial", então a cor de cad
 
 Com só a luz ambiente as texturas aparecem chapadas, sem volume. Com o sol aparecem os brilhos e as sombras projetadas sobre o asfalto. Com o holofote ligado, o grid ganha o círculo azul. A tecla **P** e o FOV não mudam isso, só o enquadramento.
 
+### Colisões, consequências e sons
+
+- **Detecção** em `src/gameplay/Collision.js`: duas esferas envolventes por kart e caixas `Box3` nos obstáculos. O segmento entre a posição anterior e a atual também é testado para detectar impactos entre frames.
+- **Consequências**: o cone é lançado e retorna após 6 segundos; o barril reduz a velocidade; os pneus causam recuo; o óleo chama `applyEffect('spin', 1)`. Karts recebem empurrões laterais proporcionais à massa, com o Bowser mais pesado. O limite lateral considera a largura da pista e do kart, mantendo a resposta do muro já implementada no jogador.
+- **Efeitos** em `CollisionEffects.js`: partículas de impacto com `ParticulasKart` e deslocamento temporário da câmera, restaurado antes da atualização seguinte.
+- **Sons** em `Sounds.js`: motor, batida, moeda e item com `Audio` e `AudioListener` do Three.js. Os buffers são gerados no código. O áudio é liberado após interação do usuário e pode ser desativado com **V**. Sons de moedas e itens são acionados pelos eventos do respectivo sistema.
+- **Eventos**: cada impacto emite `collision`, com o piloto, o obstáculo ou outro kart, o tipo e a velocidade. Contatos contínuos não geram eventos a cada frame.
+
+Testes automáticos: `node --test tests/collision.test.js tests/sounds.test.js`.
+Para conferir os impactos com os modelos reais, acessar `/tests/collision-browser.html` com o servidor Vite em execução.
+
 ## Estrutura
 
 ```
@@ -220,6 +233,10 @@ src/
     CameraManager.js        # câmeras, projeção perspectiva, HUD e teclas
   lighting/
     LightController.js      # luz ambiente, direcional (sol) e spot
+  gameplay/
+    Collision.js            # colisões, consequências e eventos de impacto
+    CollisionEffects.js     # partículas e tremor da câmera
+    Sounds.js               # motor e sons acionados por eventos
   preview-obstaculos.js     # cena separada para visualizar os objetos
   characters/
     Kart.js                 # kart procedural (estrutura comum)
@@ -267,9 +284,8 @@ public/
 - As peças da paisagem ainda não usam imagens, só cor, "flatShading" e material emissivo.
 - Na pilha de pneus, o quadrado do SVG é esticado ao longo do anel (o contorno do anel é cerca de 2,6 vezes maior que o do tubo). Como o padrão é de losangos, o efeito é discreto.
 - As imagens dos karts e do asfalto foram tiradas da internet e ainda não estão listadas em [public/CREDITS.md](public/CREDITS.md), que cobre só os modelos 3D.
-- Os itens emitem eventos ("coin", "itemHit", "itemPickup" e "itemUse"). O "Game.js" usa "coin" e "itemHit" na pontuação; os outros ficam disponíveis por "items.on(evento, fn)", por exemplo para sons.
+- Os itens emitem eventos ("coin", "itemHit", "itemPickup" e "itemUse") e as colisões emitem "collision". O "Game.js" usa "coin", "itemHit" e "collision" na pontuação, e o "Sounds.js" ouve todos eles pelo "Game".
 - As moedas voltam depois de 10 s, então dá para juntar mais de 10 numa corrida. O limite de 10 vale para o bônus de velocidade, não para os pontos.
-- Colisões entre karts e com obstáculos, e os sons, dependem do Membro 3 ("Collision.js").
 
 ## Créditos
 

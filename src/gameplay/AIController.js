@@ -329,6 +329,7 @@ export class AIController {
     let obstacle = null;
     let obstacleDistance = difficulty.obstacleDistance;
     for (const other of this.obstacles) {
+      if (!other.visible || other.userData.collisionDisabled) continue;
       const ahead = this._distanceTo(other.userData.u);
       const otherSide = other.userData.side;
       const sameLane = Math.abs(otherSide - this.preferredSide) < P.obstacleWidth

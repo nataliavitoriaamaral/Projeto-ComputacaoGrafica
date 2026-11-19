@@ -26,6 +26,9 @@ import { PlayerController } from './gameplay/PlayerController.js';
 import { AIController, DIFFICULTIES } from './gameplay/AIController.js';
 // moedas, caixas de item e itens (cogumelo, casco verde e banana)
 import { Items } from './gameplay/Items.js';
+// colisões, efeitos de impacto e sons (Membro 3)
+import { Collision } from './gameplay/Collision.js';
+import { Sounds } from './gameplay/Sounds.js';
 // regras da corrida, pontuação e telas (Membro 5)
 import { Game, STATES } from './gameplay/Game.js';
 import { HUD } from './ui/HUD.js';
@@ -166,14 +169,15 @@ let items = null;
 const aiControllers = [];
 const DIFFICULTY_ORDER = ['easy', 'normal', 'hard'];
 let difficulty = 'normal';
+let collisions = null;
 
 // Regras da corrida: estados, voltas, posição, pontuação e eventos. Os outros
 // sistemas avisam o jogo com game.emit('coin' | 'itemHit' | 'collision', ...)
 const game = new Game();
 game.setRacers(racers);
 let hud = null;
-// sistema de colisões do Membro 3 (opcional, ver mais abaixo)
-let collision = null;
+// sons: ligados só ao Game, que recebe os eventos de colisões e de itens
+const sounds = new Sounds({ racers, game });
 
 function loadTrack(index) {
   // Limpa a pista, o grid e a paisagem antigos
@@ -223,7 +227,8 @@ function loadTrack(index) {
   aiControllers.forEach((ai) => ai.setTrack(track));
   // moedas e caixas da pista nova; itens e moedas dos pilotos zerados
   if (items) items.setTrack(track);
-  collision?.setTrack?.(track);
+  collisions?.setTrack(track);
+  sounds.reset();
   // minimapa da pista nova
   if (hud) hud.setTrack(track);
 
@@ -240,25 +245,11 @@ items = new Items({ scene, track, racers, obstacles, game, showSlot: false });
 cameraManager = new CameraManager(renderer.domElement, {
   gridPoint, gridTangent, gridNormal, path: track.path, trackWidth: track.trackWidth,
 });
+// game recebe o evento collision, que desconta pontos do jogador
+collisions = new Collision({ scene, track, racers, obstacles, game });
 
 // ---------------------------------------------------------------------------
 // Regras, HUD e telas (Membro 5)
-
-// Colisões (Membro 3). O arquivo só entra se existir em src/gameplay/Collision.js
-// e exportar a classe Collision. Ela recebe tudo que pode precisar e avisa o
-// jogo com game.emit('collision', { racer, other }); se tiver setTrack() e
-// reset(), eles são chamados na troca de pista e ao reiniciar.
-const collisionModules = import.meta.glob('./gameplay/Collision.js', { eager: true });
-const CollisionSystem = Object.values(collisionModules)[0]?.Collision ?? null;
-if (CollisionSystem) {
-  try {
-    collision = new CollisionSystem({
-      scene, track, racers, obstacles, trackObjects, game, items, aiControllers,
-    });
-  } catch (e) {
-    showErr('Collision falhou: ' + (e.stack || e.message));
-  }
-}
 
 // o jogo só começa depois que os 4 modelos carregaram
 function isReady() {
@@ -271,7 +262,8 @@ function resetRace() {
   if (controleJogador) controleJogador.trocarPista(track);
   aiControllers.forEach((ai) => ai.setTrack(track));
   items.reset();
-  collision?.reset?.();
+  collisions.reset();
+  sounds.reset();
 }
 
 // vai para a contagem regressiva (usado por Jogar, R e "Jogar de novo")
@@ -365,15 +357,21 @@ renderer.setAnimationLoop(() => {
       if (game.isRacing && teclado.foiApertada('usarItem')) items.use(controleJogador.racer);
     }
     aiControllers.forEach((ai) => ai.update(delta));
+    // depois do movimento: obstáculos, empurrões e limites da pista
+    collisions.update(delta, game.isRacing);
     racers.forEach((r) => r.update(delta, racers));
-    collision?.update?.(delta);
     // depois que todos andaram: coleta, roleta, cascos e bananas
     items.update(delta);
     // por último: voltas, posição e pontos já com os karts nos lugares novos
     game.update(delta);
+  } else {
+    // na pausa as colisões ficam inativas e o tremor da câmera é desfeito
+    collisions.update(delta, false);
   }
   hud.update(delta);
   cameraManager.update(delta);
+  collisions.updateCamera(cameraManager.camera);
+  sounds.update(cameraManager.camera, game.isRacing);
   renderer.render(scene, cameraManager.camera);
   // limpa as teclas apertadas neste frame depois que todos já leram
   teclado.fimDoFrame();
@@ -394,6 +392,7 @@ ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
       // as câmeras 4 e 5 seguem o alvoCamera do jogador, que acompanha o
       // kart mas não gira junto quando ele roda
       controleJogador = new PlayerController({ racer, track, scene, teclado });
+      collisions.register(racer, controleJogador);
       cameraManager.setFollowTarget(controleJogador.alvoCamera);
       cameraManager.setView('chase');
       applyState(game.state); // no menu o jogador nasce sem poder dirigir
@@ -405,6 +404,7 @@ ROSTER.forEach(async ({ name, kartPreset, characterFactory }, slot) => {
       });
       aiControllers.push(ai);
       applyState(game.state);
+      collisions.register(racer, ai);
     }
     if (isReady()) hud.setReady(true);
   } catch (e) {
