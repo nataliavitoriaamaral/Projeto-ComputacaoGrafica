@@ -155,7 +155,7 @@ Com só a luz ambiente as texturas aparecem chapadas, sem volume. Com o sol apar
 - **Consequências**: o cone é lançado e retorna após 6 segundos; o barril reduz a velocidade; os pneus causam recuo; o óleo chama `applyEffect('spin', 1)`. Karts recebem empurrões laterais proporcionais à massa, com o Bowser mais pesado. O limite lateral considera a largura da pista e do kart, mantendo a resposta do muro já implementada no jogador.
 - **Efeitos** em `CollisionEffects.js`: partículas de impacto com `ParticulasKart` e deslocamento temporário da câmera, restaurado antes da atualização seguinte.
 - **Sons** em `Sounds.js`: motor, batida, moeda e item com `Audio` e `AudioListener` do Three.js. Os buffers são gerados no código. O áudio é liberado após interação do usuário e pode ser desativado com **V**. Sons de moedas e itens são acionados pelos eventos do respectivo sistema.
-- **Eventos**: cada impacto emite `collision`, com o piloto, o obstáculo ou outro kart, o tipo e a velocidade. Contatos contínuos não geram eventos a cada frame. A integração com a pontuação e o reinício está descrita em [docs/colisoes.md](docs/colisoes.md).
+- **Eventos**: cada impacto emite `collision`, com o piloto, o obstáculo ou outro kart, o tipo e a velocidade. Contatos contínuos não geram eventos a cada frame.
 
 Testes automáticos: `node --test tests/collision.test.js tests/sounds.test.js`.
 Para conferir os impactos com os modelos reais, acessar `/tests/collision-browser.html` com o servidor Vite em execução.
